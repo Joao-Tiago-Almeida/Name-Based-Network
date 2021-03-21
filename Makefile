@@ -1,7 +1,7 @@
 #compiler used
 CC = gcc
 
-CFLAGS = -Wall -std=c99 
+CFLAGS = -Wall
 
 #executable name
 EXECUTABLE = ndn
@@ -13,5 +13,3 @@ $(EXECUTABLE):
 clean:
 	@clear
 	rm $(EXECUTABLE)
-
-FORCE:
