@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-bool check_IP(char* IP);
-bool check_port(char* port);
-bool check_net(char* net);
+bool check_IP(char *IP);
+bool check_port(char *port);
+bool check_net(char *net);
 
 #endif

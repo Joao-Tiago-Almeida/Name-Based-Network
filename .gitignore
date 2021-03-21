@@ -55,4 +55,4 @@ dkms.conf
 ndn
 
 #vscode fodler
-.vscode
+.vscode/*

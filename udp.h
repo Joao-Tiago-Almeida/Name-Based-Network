@@ -10,14 +10,13 @@
 #include <netdb.h>
 #include <unistd.h>
 
-// typedef struct net_ NET;
+#include "util.h"
 
-void set_parameters(int argc, char* argv[]);
+void set_parameters(int argc, char *argv[]);
 void get_info();
-bool send_udp_message(char* message);
-char* receive_udp_message();
+bool send_udp_message(char *message);
+char *receive_udp_message();
 void open_UDP();
 void close_UDP();
-
 
 #endif

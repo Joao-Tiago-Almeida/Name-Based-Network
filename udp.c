@@ -35,14 +35,29 @@ Initialise the parameters related to the connection with the remote UDP server
 */
 void set_parameters(int argc, char *argv[])
 {
-    strcpy(NET.IP, argv[1]);
-    strcpy(NET.TCP, argv[2]);
+    if (check_IP(argv[1]))
+        strcpy(NET.IP, argv[1]);
+    else
+        return;
+
+    if (check_port(argv[2]))
+        strcpy(NET.TCP, argv[2]);
+    else
+        return;
+
     if (argc >= 4)
-        strcpy(NET.regIP, argv[3]);
+        if (check_IP(argv[3]))
+            strcpy(NET.regIP, argv[3]);
+        else
+            return;
     else
         strcpy(NET.regIP, "193.136.138.142");
+
     if (argc == 5)
-        strcpy(NET.regUDP, argv[4]);
+        if (check_port(argv[3]))
+            strcpy(NET.regUDP, argv[4]);
+        else
+            return;
     else
         strcpy(NET.regUDP, "59000");
 
@@ -55,14 +70,29 @@ void set_parameters(int argc, char *argv[])
 Print the parameters related to the connection with the remote UDP server
 */
 void get_info()
-{   
-    printf("\n[INFO]\a");
+{
+    printf("\n[INFO]\n\a");
     printf("IP: %s\n", NET.IP);
     printf("TCP: %s\n", NET.TCP);
     printf("regIP: %s\n", NET.regIP);
     printf("regUDP: %s\n\n", NET.regUDP);
 }
 
+/*
+Sends a message to the remote UDP server.
+Types of message and responses
+
+- [CLIENT] REG net IP TCP   :   Um nó regista o seu contacto no servidor de nós e associa-o à rede net.
+- [SERVER] OKREG            :   O servidor de nós confirma o registo de um contacto.
+
+- [CLIENT] UNREG net IP TCP :   O nó retira o seu contacto associado à rede net.
+- [SERVER] OKUNREG          :   O servidor de nós confirma a retirada de um contacto.
+
+- [CLIENT] NODES net        :   Um nó pede ao servidor de nós os contactos associados à rede net.
+- [SERVER] NODESLIST net<LF>
+                IP1 TCP1<LF>    
+                IP2 TCP2<LF>    :   O servidor de nós confirma a retirada de um contacto.
+*/
 bool send_udp_message(char *message)
 {
     if (!parameters_are_set)
@@ -80,10 +110,13 @@ bool send_udp_message(char *message)
 
     n_sent = sendto(fd_udp, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
     printf("%s\n", message);
-    
+
     return true;
 }
 
+/*
+Receives a message to the remote UDP server.
+*/
 char *receive_udp_message()
 {
     n_received = recvfrom(fd_udp, buffer, SIZE_UDP, 0, (struct sockaddr *)&addr, &addrlen);
@@ -117,12 +150,3 @@ void close_UDP()
     close(fd_udp);
     freeaddrinfo(res);
 }
-
-// Sending message
-
-// // Receiving echo
-// n = recvfrom(fd, buffer, 128, 0, (struct sockaddr *)&addr, &addrlen);
-// if (n == -1) /*error*/ exit(1);
-
-// write(1, "echo: ", 6); //stdout
-// write(1, buffer, n);
