@@ -8,14 +8,12 @@
 #include <netdb.h>
 #include <unistd.h>
 
-#define SIZE_UDP 128
-
 struct net
 {
-    char IP[16];    //   IP address of local machine
-    char TCP[6];    //   TCP port of local machine
-    char regIP[16]; //   IP address of remote list
-    char regUDP[6]; //   UDP port of remote List
+    char IP[IP_SIZE];       //   IP address of local machine
+    char TCP[PORT_SIZE];    //   TCP port of local machine
+    char regIP[IP_SIZE];    //   IP address of remote list
+    char regUDP[PORT_SIZE]; //   UDP port of remote List
 };
 
 struct net NET;                  // pivate struct of this file containing information about the remote UDP server
@@ -28,7 +26,7 @@ int fd_udp, errcode;
 ssize_t n_sent, n_received;
 struct sockaddr_in addr;
 socklen_t addrlen = sizeof(addr);
-char buffer[SIZE_UDP];
+char buffer[UDP_SIZE];
 
 /*
 Initialise the parameters related to the connection with the remote UDP server
@@ -119,7 +117,7 @@ Receives a message to the remote UDP server.
 */
 char *receive_udp_message()
 {
-    n_received = recvfrom(fd_udp, buffer, SIZE_UDP, 0, (struct sockaddr *)&addr, &addrlen);
+    n_received = recvfrom(fd_udp, buffer, UDP_SIZE, 0, (struct sockaddr *)&addr, &addrlen);
     if (n_received == -1)
     {
         fprintf(stderr, "Error in the UDP receiving message.\n");
