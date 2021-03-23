@@ -1,7 +1,7 @@
 #compiler used
 CC = gcc
 
-CFLAGS = -Wall
+CFLAGS = -Wall -Wextra -Werror -Wshadow -Wformat=2
 
 #executable name
 EXECUTABLE = ndn

@@ -1,5 +1,5 @@
-#ifndef UDP_H
-#define UDP_H
+#ifndef LIST_NODES
+#define LIST_NODES
 
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +16,7 @@
 #define IP_SIZE 16
 #define PORT_SIZE 6
 
-void set_parameters(int argc, char *argv[]);
+bool set_parameters(int argc, char *argv[]);
 void get_info();
 bool send_udp_message(char *message);
 char *receive_udp_message();

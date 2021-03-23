@@ -1,7 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "udp.h"
+#include "list_nodes.h"
+#include "server.h"
 
 #define STRING_SIZE 128
 #define ID_SIZE 3
@@ -47,6 +48,7 @@ void get_command()
 
             /*  start a TCP connection */
         }
+        
     }
     //  TODO    -   só aplicar estes comandos quando o nó já está registado
     else if (!strcmp(command_type, "create")) //  command:    create subname
@@ -82,6 +84,7 @@ void get_command()
     else if (!strcmp(command_type, "exit")) //  command:    exit
     {
         /* close app */
+        server_down();
         printf("Exit the program safetly! :)\n");
     }
     else
@@ -100,8 +103,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    set_parameters(argc, argv);
+    if (!set_parameters(argc, argv))
+        exit(1);
     get_info();
+
+    server_up(argv[2]);
+
+    send_udp_message("NODES 35");
+    receive_udp_message();
 
     get_command();
 

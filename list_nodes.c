@@ -1,4 +1,5 @@
-#include "udp.h"
+#include "list_nodes.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -16,9 +17,8 @@ struct net
     char regUDP[PORT_SIZE]; //   UDP port of remote List
 };
 
-struct net NET;                  // pivate struct of this file containing information about the remote UDP server
-bool parameters_are_set = false; // If I already know the parameters
-bool is_registered = false;      // If I am registered in the list
+struct net NET;             // pivate struct of this file containing information about the remote UDP server
+bool is_registered = false; // If I am registered in the list
 
 // Set UDP connection
 struct addrinfo hints, *res;
@@ -31,23 +31,23 @@ char buffer[UDP_SIZE];
 /*
 Initialise the parameters related to the connection with the remote UDP server
 */
-void set_parameters(int argc, char *argv[])
+bool set_parameters(int argc, char *argv[])
 {
     if (check_IP(argv[1]))
         strcpy(NET.IP, argv[1]);
     else
-        return;
+        return false;
 
     if (check_port(argv[2]))
         strcpy(NET.TCP, argv[2]);
     else
-        return;
+        return false;
 
     if (argc >= 4)
         if (check_IP(argv[3]))
             strcpy(NET.regIP, argv[3]);
         else
-            return;
+            return false;
     else
         strcpy(NET.regIP, "193.136.138.142");
 
@@ -55,13 +55,13 @@ void set_parameters(int argc, char *argv[])
         if (check_port(argv[3]))
             strcpy(NET.regUDP, argv[4]);
         else
-            return;
+            return false;
     else
         strcpy(NET.regUDP, "59000");
 
     open_UDP();
 
-    parameters_are_set = true;
+    return true;
 }
 
 /*
@@ -93,12 +93,6 @@ Types of message and responses
 */
 bool send_udp_message(char *message)
 {
-    if (!parameters_are_set)
-    {
-        fprintf(stderr, "The UDP parameters are not set yet.\n");
-        return false;
-    }
-
     errcode = getaddrinfo(NET.regIP, NET.regUDP, &hints, &res);
     if (errcode != 0)
     {
