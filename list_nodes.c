@@ -11,10 +11,10 @@
 
 struct net
 {
-    char IP[IP_SIZE];       //   IP address of local machine
-    char TCP[PORT_SIZE];    //   TCP port of local machine
-    char regIP[IP_SIZE];    //   IP address of remote list
-    char regUDP[PORT_SIZE]; //   UDP port of remote List
+    char IP[BUFFER_SIZE];       //   IP address of local machine
+    char TCP[BUFFER_SIZE];    //   TCP port of local machine
+    char regIP[BUFFER_SIZE];    //   IP address of remote list
+    char regUDP[BUFFER_SIZE]; //   UDP port of remote List
 };
 
 struct net NET;             // pivate struct of this file containing information about the remote UDP server
@@ -22,11 +22,11 @@ bool is_registered = false; // If I am registered in the list
 
 // Set UDP connection
 struct addrinfo hints, *res;
-int fd_udp, errcode;
+int fd_udp;
 ssize_t n_sent, n_received;
 struct sockaddr_in addr;
 socklen_t addrlen = sizeof(addr);
-char buffer[UDP_SIZE];
+char buffer[BUFFER_SIZE];
 
 /*
 Initialise the parameters related to the connection with the remote UDP server
@@ -93,15 +93,10 @@ Types of message and responses
 */
 bool send_udp_message(char *message)
 {
-    errcode = getaddrinfo(NET.regIP, NET.regUDP, &hints, &res);
-    if (errcode != 0)
-    {
-        fprintf(stderr, "Error in the UDP function _getaddrinfo_ in Sending message.\n");
-        exit(1);
-    }
+    Getaddrinfo(NET.regIP, NET.regUDP, &hints, &res);
 
     n_sent = sendto(fd_udp, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
-    printf("%s\n", message);
+    // printf("%s\n", message);
 
     return true;
 }
@@ -109,28 +104,35 @@ bool send_udp_message(char *message)
 /*
 Receives a message to the remote UDP server.
 */
-char *receive_udp_message()
+void receive_udp_message(char *message)
 {
-    n_received = recvfrom(fd_udp, buffer, UDP_SIZE, 0, (struct sockaddr *)&addr, &addrlen);
-    if (n_received == -1)
-    {
-        fprintf(stderr, "Error in the UDP receiving message.\n");
-        exit(1);
-    }
+    fd_set rfds;
 
-    write(1, buffer, n_received);
-    printf("\n\n");
-    return " ";
+    FD_ZERO(&rfds);
+    FD_SET(0, &rfds);
+    FD_SET(fd_udp, &rfds);
+    struct timeval timeout = {2 /*seconds*/, 0 /*milliseconds*/};
+
+    int n = Select(fd_udp + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout);
+    if (n == 0)
+        printf("Time exceeded during an incoming UDP message\n");
+
+    else if (FD_ISSET(fd_udp, &rfds)) // stdin
+    {
+        memset(buffer, '\0', BUFFER_SIZE);
+        n_received = Recvfrom(fd_udp, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr, &addrlen);
+
+        // desencrypt
+        memset(message, '\0', BUFFER_SIZE);
+        strncpy(message, buffer, n_received);
+    }
+    // write(1, buffer, n_received);
+    // printf("\n\n");
 }
 
 void open_UDP()
 {
-    fd_udp = socket(AF_INET, SOCK_DGRAM, 0); //UDP socket
-    if (fd_udp == -1)
-    {
-        fprintf(stderr, "Error opening UDP connection\n");
-        exit(1);
-    }
+    fd_udp = Socket(AF_INET, SOCK_DGRAM, 0); //UDP socket
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;      //IPv4
