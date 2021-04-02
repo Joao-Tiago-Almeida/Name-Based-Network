@@ -1,6 +1,5 @@
 #include "protocol_support.h"
 
-
 void Getaddrinfo(const char *hostname, const char *servname,
                  const struct addrinfo *hints, struct addrinfo **res)
 {
@@ -38,7 +37,7 @@ int Socket(int domain, int type, int protocol)
     return fd;
 }
 
-// sudo lsof -i :port
+// sudo lsof -i :port - https://stackoverflow.com/questions/3855127/find-and-kill-process-locking-port-3000-on-mac : 1. kill -15 <PID>, 2. kill -9 <PID>
 void Bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int n = bind(sockfd, addr, addrlen);
@@ -127,7 +126,7 @@ ssize_t Write(int fd, const void *buf, size_t count)
     int n = write(fd, buf, count);
     if (n == -1)
     {
-        fprintf(stderr, "Error in Read(): %s\n", strerror(errno));
+        fprintf(stderr, "Error in Write(): %s\n", strerror(errno));
         Close(fd);
         exit(1);
     }

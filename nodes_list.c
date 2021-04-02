@@ -1,13 +1,4 @@
-#include "list_nodes.h"
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
+#include "nodes_list.h"
 
 struct net
 {
@@ -16,9 +7,7 @@ struct net
     char regIP[BUFFER_SIZE];    //   IP address of remote list
     char regUDP[BUFFER_SIZE]; //   UDP port of remote List
 };
-
 struct net NET;             // pivate struct of this file containing information about the remote UDP server
-bool is_registered = false; // If I am registered in the list
 
 // Set UDP connection
 struct addrinfo hints, *res;
@@ -34,30 +23,30 @@ Initialise the parameters related to the connection with the remote UDP server
 bool set_parameters(int argc, char *argv[])
 {
     if (check_IP(argv[1]))
-        strcpy(NET.IP, argv[1]);
+        sprintf(NET.IP, "%s", argv[1]);
     else
         return false;
 
     if (check_port(argv[2]))
-        strcpy(NET.TCP, argv[2]);
+        sprintf(NET.TCP, "%s", argv[2]);
     else
         return false;
 
     if (argc >= 4)
         if (check_IP(argv[3]))
-            strcpy(NET.regIP, argv[3]);
+            sprintf(NET.regIP, "%s", argv[3]);
         else
             return false;
     else
-        strcpy(NET.regIP, "193.136.138.142");
+        sprintf(NET.regIP, "193.136.138.142");
 
     if (argc == 5)
         if (check_port(argv[3]))
-            strcpy(NET.regUDP, argv[4]);
+            sprintf(NET.regUDP, "%s", argv[4]);
         else
             return false;
     else
-        strcpy(NET.regUDP, "59000");
+        sprintf(NET.regUDP, "59000");
 
     open_UDP();
 
@@ -77,7 +66,7 @@ void get_info()
 }
 
 /*
-Sends a message to the remote UDP server.
+message to the remote UDP server.
 Types of message and responses
 
 - [CLIENT] REG net IP TCP   :   Um nó regista o seu contacto no servidor de nós e associa-o à rede net.
@@ -124,7 +113,7 @@ void receive_udp_message(char *message)
 
         // desencrypt
         memset(message, '\0', BUFFER_SIZE);
-        strncpy(message, buffer, n_received);
+        sprintf(message, "%s", buffer);
     }
     // write(1, buffer, n_received);
     // printf("\n\n");

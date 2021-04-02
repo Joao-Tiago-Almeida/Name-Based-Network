@@ -45,20 +45,38 @@ void *checked_calloc(size_t nitems, size_t size)
     if (ptr == NULL)
     {
         fprintf(stderr, "Error allocating memory\n");
-        exit(0);
+        exit(1);
     }
 
     return ptr;
 }
 
+/**
+ * Alocação limitada de memória
+ * @param  size tamanho finito de memória a alocar
+ * @return      ponteiro para o espaço de memória alocado
+ */
+void *checked_realloc(void *ptr, size_t size)
+{
+
+    ptr = realloc(ptr, size);
+
+    if (ptr == NULL)
+    {
+        fprintf(stderr, "Error allocating memory\n");
+        exit(1);
+    }
+
+    return ptr;
+}
 
 int get_number_of_LF(char *string)
-{   
+{
     int count = 0;
-    for (int i = 0; string[i] != '\0'; ++i) {
+    for (int i = 0; string[i] != '\0'; ++i)
+    {
         if ('\n' == string[i])
             ++count;
     }
     return count;
 }
-

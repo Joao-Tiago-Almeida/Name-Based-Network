@@ -8,11 +8,12 @@
 
 #define BUFFER_SIZE 1023
 
+
 bool check_IP(char *IP);
 bool check_port(char *port);
 bool check_net(char *net);
-void *checked_calloc(size_t size, size_t n);
-
 int get_number_of_LF(char *string);
+void *checked_calloc(size_t size, size_t n);
+void *checked_realloc(void *ptr, size_t size);
 
 #endif
