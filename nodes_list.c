@@ -41,7 +41,7 @@ bool set_parameters(int argc, char *argv[])
         sprintf(NET.regIP, "193.136.138.142");
 
     if (argc == 5)
-        if (check_port(argv[3]))
+        if (check_port(argv[4]))
             sprintf(NET.regUDP, "%s", argv[4]);
         else
             return false;

@@ -109,16 +109,24 @@ int Listen(int sockfd)
 
 ssize_t Read(int fd, void *buf, size_t count)
 {   
-    memset(buf, '\0', BUFFER_SIZE);
-    int n = read(fd, buf, count);
-    if (n == -1)
+    char line[BUFFER_SIZE];
+    int n, n_total = 0;
+    memset(line, '\0', BUFFER_SIZE);
+    do
     {
-        fprintf(stderr, "Error in Read(): %s\n", strerror(errno));
-        Close(fd);
-        exit(1);
-    }
+        n = read(fd, line, count);
+        if (n == -1)
+        {
+            fprintf(stderr, "Error in Read(): %s\n", strerror(errno));
+            Close(fd);
+            exit(1);
+        }
+        n_total = n_total+n;
+        sprintf(buf, "%s%s", buf, line);
+    } while (get_number_of_LF(line)==0 && n!=0);
+
     printf("You received a message: %s\n", buf);
-    return n;
+    return n_total;
 }
 
 ssize_t Write(int fd, const void *buf, size_t count)

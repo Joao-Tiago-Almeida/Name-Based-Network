@@ -2,38 +2,36 @@
 
 #define ALLOCATION_OFFSET 2
 
+// camada da topologia
 struct contact
 {
     char ip[16];
     char tcp[6];
 };
 
+// camada do encaminhamento
 struct table
 {
     int socket;
-    char *id;
-    enum
-    {
-        external,
-        internal,
-        unknown
-    } neighbour;
+    char id[BUFFER_SIZE];
 };
 
 struct resizable_vect
 {
-    void *vector;
+    void *item;
     unsigned int occupancy;
     unsigned int max_size;
 };
 
 struct node
 {
+    // camada da topologia
     struct contact external_neighbour;
     struct contact recovery_contact;
-    struct contact *list_internal_neighbours;
+    struct resizable_vect *list_internal_neighbours;
     unsigned short n_internal;
 
+    // camda do encaminhamento
     struct resizable_vect *table;
 };
 struct node NODE; // only one node per application
@@ -47,34 +45,18 @@ void set_external_and_recovery(char *ip, char *tcp, char *recovery, int socket)
     sscanf(recovery, "EXTERN %s %s\n", NODE.recovery_contact.ip, NODE.recovery_contact.tcp);
 
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
-    ((struct table *)NODE.table->vector)[NODE.table->occupancy - 1].socket = socket;
-    ((struct table *)NODE.table->vector)[NODE.table->occupancy - 1].neighbour = external;
-
+    ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = socket;
 }
 
-void add_internal_neighbour(char *neighbour, int socket)
+void add_internal_neighbour(char *ip, char *tcp, int socket)
 {
-    // Internal neighbour
-    if (strcmp(neighbour, "void") == 0) // there isnt any internal neighbour
-        return;
 
-    if (NODE.list_internal_neighbours == NULL)
-    {
-        NODE.list_internal_neighbours = (struct contact *)checked_calloc(1, sizeof(struct contact));
-        NODE.n_internal = 0;
-    }
-    else
-    {
-        NODE.list_internal_neighbours = (struct contact *)checked_realloc(NODE.list_internal_neighbours, sizeof(struct contact) * (NODE.n_internal + 1));
-    }
-    sscanf(neighbour, "NEW %s %s\n",
-           NODE.list_internal_neighbours[NODE.n_internal].ip,
-           NODE.list_internal_neighbours[NODE.n_internal++].tcp);
+    NODE.list_internal_neighbours = add_item_checkup(NODE.list_internal_neighbours, sizeof(struct contact));
+    sprintf(((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip, "%s", ip);
+    sprintf(((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp, "%s", tcp);
 
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
-    ((struct table *)NODE.table->vector)[NODE.table->occupancy - 1].socket = socket;
-    ((struct table *)NODE.table->vector)[NODE.table->occupancy - 1].neighbour = internal;
-
+    ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = socket;
 }
 
 // Displays the external and recovery contacts
@@ -87,9 +69,109 @@ void show_topology()
         printf("Sniff Sniff, I am alone on the network. I could call my recovery contact ... but that is me. Wanna join me and watch Peaky Blinders?\n");
         return;
     }
-
     printf("\t*\tRecovery Neighbour:\t%s:%s\n", NODE.recovery_contact.ip, NODE.recovery_contact.tcp);
     printf("\t*\tExternal Neighbour:\t%s:%s\n\n", NODE.external_neighbour.ip, NODE.external_neighbour.tcp);
+}
+
+void show_table()
+{
+    char socket_[BUFFER_SIZE]; // auxiliar struct to remove -1 and replace to -
+    size_t n = 0;
+
+    printf("Adjacency Table\n\tid\t|\tsocket|\n");
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if ((n = strlen(((struct table *)NODE.table->item)[i].id)) != 0) // knows all information about the node
+        {
+            // personalise personal socket
+            sprintf(socket_, "%d", ((struct table *)NODE.table->item)[i].socket);
+            if (strcmp(socket_, "-1") == 0) // found personal socket
+                sprintf(socket_, "-");
+
+            printf("\t%s\t|\t%s\t\n",
+                   ((struct table *)NODE.table->item)[i].id,
+                   socket_);
+        }
+    }
+}
+
+/**
+ * 
+*/
+void update_table(int fd, char *id)
+{
+    char message[MESSAGE_SIZE];
+    NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
+    int *diferent_sockets = checked_calloc(NODE.table->occupancy - 1, sizeof(int)); // worst case
+    int number_diferent_sockets = 0;
+    bool send_advertise = true;
+
+    // iterates over the adjacency table
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        send_advertise = true;
+        // iterates over connections who was already sent a message
+        for (int j = 0; j < number_diferent_sockets; j++)
+        {
+            if (((struct table *)NODE.table->item)[i].socket == diferent_sockets[j])
+            {
+                send_advertise = false;
+                break;
+            }
+        }
+        if (!send_advertise)
+            continue;
+
+        // whether its me or the income socket
+        if ((((struct table *)NODE.table->item)[i].socket == -1) || (((struct table *)NODE.table->item)[i].socket == fd))
+            continue;
+
+        sprintf(message, "ADVERTISE %s", id);
+        Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
+
+        // save the connection
+        diferent_sockets[number_diferent_sockets++] = ((struct table *)NODE.table->item)[i].socket;
+    }
+    free(diferent_sockets);
+
+    // check if I know the id, and if a new neighbour is found, I will send my table
+    bool direct_neighbour = false;
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if ((fd == ((struct table *)NODE.table->item)[i].socket) && (strlen(((struct table *)NODE.table->item)[i].id) == 0))
+        {
+            // found new neighbour, gonna send my table
+            for (unsigned int j = 0; j < NODE.table->occupancy; j++)
+            {
+                // whether its me or the income socket
+                if ((((struct table *)NODE.table->item)[j].socket == -1) || (i == j))
+                    continue;
+
+                sprintf(message, "ADVERTISE %s", ((struct table *)NODE.table->item)[i].id);
+                Write(fd, message, strlen(message));
+            }
+            direct_neighbour = true;
+            sprintf(((struct table *)NODE.table->item)[i].id, "%s", id);
+            break;
+        }
+    }
+
+    if(direct_neighbour)
+        return;
+
+    // add node to my table
+    NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
+    ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = fd;
+    sprintf(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, "%s", id);
+    
+}
+
+void init(char *id)
+{
+    NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
+
+    ((struct table *)NODE.table->item)[0].socket = -1;
+    sprintf(((struct table *)NODE.table->item)[0].id, "%s", id);
 }
 
 char *get_external_neighbour_ip()
@@ -109,23 +191,49 @@ char *get_recovery_contact_tcp()
     return NODE.external_neighbour.tcp;
 }
 
+/** get the different chanels around the node
+FD_SET()
+              This macro adds the file descriptor fd to set.  Adding a
+              file descriptor that is already present in the set is a
+              no-op, and does not produce an error.
+ */
+void set_sockets(fd_set *rfds)
+{
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if (((struct table *)NODE.table->item)[i].socket != -1)
+            FD_SET(((struct table *)NODE.table->item)[i].socket, rfds);
+    }
+}
+
 // ensures that the vector has space
 struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size)
 {
     if (ptr == NULL)
         ptr = (struct resizable_vect *)checked_calloc(1, sizeof(struct resizable_vect));
 
-    if (ptr->vector == NULL)
+    if (ptr->item == NULL)
     {
-        ptr->vector = checked_calloc(ALLOCATION_OFFSET, size);
+        ptr->item = checked_calloc(ALLOCATION_OFFSET, size);
         ptr->max_size = ALLOCATION_OFFSET;
         ptr->occupancy = 0;
     }
     else if (ptr->occupancy == ptr->max_size)
     {
         ptr->max_size = ptr->max_size + ALLOCATION_OFFSET; // increase max
-        ptr->vector = checked_realloc(ptr->vector, size * (ptr->max_size));
+        ptr->item = checked_realloc(ptr->item, size * (ptr->max_size));
     }
     ptr->occupancy++;
     return ptr;
+}
+
+// Iterates through the hash table and returns the set socket if a known connection was set, and -1 otherwise
+int FD_ISKNOWN(fd_set *rfds)
+{
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if (FD_ISSET(((struct table *)NODE.table->item)[i].socket, rfds))
+            return ((struct table *)NODE.table->item)[i].socket;
+    }
+    return -1;
 }

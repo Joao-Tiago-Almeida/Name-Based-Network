@@ -14,7 +14,6 @@
 #include <stdbool.h>
 #include <errno.h>
 
-
 #include "util.h"
 
 
