@@ -72,6 +72,7 @@ void Connect(int sockfd, const struct sockaddr *addr,socklen_t addrlen)
     }
 }
 
+// TODO 
 void Close(int fildes)
 {
     int n = close(fildes);
@@ -89,7 +90,7 @@ int Select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
     if (n == -1)
     {
         fprintf(stderr, "Error in Select(): %s\n", strerror(errno));
-        Close(nfds);
+        // Close(nfds); TODO
         exit(1);
     }
     return n;
@@ -111,7 +112,7 @@ ssize_t Read(int fd, void *buf, size_t count)
 {   
     char line[BUFFER_SIZE];
     int n, n_total = 0;
-    memset(line, '\0', BUFFER_SIZE);
+    memset(buf, '\0', MESSAGE_SIZE);
     do
     {
         n = read(fd, line, count);
@@ -122,10 +123,13 @@ ssize_t Read(int fd, void *buf, size_t count)
             exit(1);
         }
         n_total = n_total+n;
-        sprintf(buf, "%s%s", buf, line);
+        
+        for(int i=0; i<n; i++)
+            sprintf(buf, "%s%c", buf, line[i]);
+
     } while (get_number_of_LF(line)==0 && n!=0);
 
-    printf("You received a message: %s\n", buf);
+    printf("You received a %d:%d Bytes message: %s\n", n_total, (int)strlen(buf), buf);
     return n_total;
 }
 
@@ -138,7 +142,7 @@ ssize_t Write(int fd, const void *buf, size_t count)
         Close(fd);
         exit(1);
     }
-    printf("You wrote a message: %s\n", buf);
+    printf("You wrote a %d:%d Bytes message: %s\n", n, (int)strlen(buf), buf);
     return n;
 }
 

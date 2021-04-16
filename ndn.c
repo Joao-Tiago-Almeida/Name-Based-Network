@@ -69,7 +69,7 @@ void network_interaction(char *ip, char *port)
     char buffer[MESSAGE_SIZE], command[MESSAGE_SIZE], net[BUFFER_SIZE], id[BUFFER_SIZE], bootIP[BUFFER_SIZE], bootTCP[BUFFER_SIZE], message[MESSAGE_SIZE + 1];
     char new_node_ip[BUFFER_SIZE], new_node_port[BUFFER_SIZE]; // IP and TCP for a node that is already in the tree
     int number_of_line_feed = 0;
-    int fd_server, fd_client, fd_neighbour, newfd, n_select;
+    int fd_server, fd_client, fd_neighbour, newfd, n_select, maxfd=0;
     fd_set rfds;
     struct addrinfo hints, *res_server, *res_client;
     struct sockaddr_in addr_client;
@@ -155,9 +155,11 @@ void network_interaction(char *ip, char *port)
             FD_ZERO(&rfds);
             FD_SET(fd_client, &rfds);
             if (Select(fd_client + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout)) // if time reach to the end, a = is returned
-            {
+            {   
                 Read(fd_client, message, BUFFER_SIZE); // EXTERN IP TCP<LF>
+                init(id);
                 set_external_and_recovery(bootIP, bootTCP, message, fd_client);
+                // Check if message received is OK  TODO
                 state = connected;
                 sprintf(message, "ADVERTISE %s\n", id);
                 Write(fd_client, message, strlen(message)); // ADVERTISE IP TCP<LF>
@@ -179,7 +181,6 @@ void network_interaction(char *ip, char *port)
                 printf("\t>\tleave\n");
                 printf("\t>\texit\n\n");
 
-                init(id);
                 // Starting accepting incoming connections
                 Listen(fd_server);
 
@@ -196,88 +197,94 @@ void network_interaction(char *ip, char *port)
             }
 
             FD_ZERO(&rfds);
-            set_sockets(&rfds);
-            FD_SET(STDIN_FILENO, &rfds);
-            FD_SET(fd_server, &rfds);
-            n_select = Select(fd_server + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL);
-            if (FD_ISSET(STDIN_FILENO, &rfds)) // stdin
+            FD_SET(STDIN_FILENO, &rfds);    // keyboard
+            maxfd = set_sockets(&rfds);     // existing sockets
+            FD_SET(fd_server, &rfds);       // incoming sockets
+            maxfd = max(maxfd, fd_server);
+            n_select = Select(maxfd+1 , &rfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL);
+            for(;n_select;n_select--)
             {
-                fgets(buffer, BUFFER_SIZE, stdin);
-                sscanf(buffer, "%s", command);
-                if (strcmp(command, "create subname") == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
+                if (FD_ISSET(STDIN_FILENO, &rfds)) // stdin
                 {
-                    printf("Querias querias ... batatinhas com enguias\n");
+                    FD_CLR(STDIN_FILENO, &rfds);
+                    fgets(buffer, BUFFER_SIZE, stdin);
+                    memset(command, '\0', MESSAGE_SIZE);
+                    sscanf(buffer, "%s", command);
+                    if (strcmp(command, "create subname") == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
+                    {
+                        printf("Querias querias ... batatinhas com enguias\n");
+                    }
+                    else if (strcmp(command, "get name") == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
+                    {
+                        printf("Querias querias ... batatinhas com enguias\n");
+                    }
+                    else if (strcmp(command, "show topology") == 0 || strcmp(command, "st") == 0) // Mostra os contactos do vizinho externo e do vizinho de recuperação.
+                    {
+                        show_topology();
+                    }
+                    else if (strcmp(command, "show routing") == 0 || strcmp(command, "sr") == 0) // Mostra a tabela de expedição do nó.
+                    {
+                        show_table();
+                    }
+                    else if (strcmp(command, "show cache") == 0 || strcmp(command, "sc") == 0) // Mostra os nomes dos objetos guardados na cache.
+                    {
+                        printf("Querias querias ... batatinhas com enguias\n");
+                    }
+                    else if (strcmp(command, "leave") == 0) // Saída do nó da rede.
+                    {
+                        printf("Querias querias ... batatinhas com enguias\n");
+                    }
+                    else if (strcmp(command, "exit") == 0) // Fecho da aplicação.
+                    {
+                        sprintf(message, "UNREG %s %s %s", net, ip, port);
+                        send_udp_message(message);
+                        close_node();
+                        Close(fd_server);
+                        exit(0);
+                    }
+                    else
+                    {
+                        printf("Invalid command. \n");
+                    }
                 }
-                else if (strcmp(command, "get name") == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
+                else if (FD_ISSET(fd_server, &rfds)) // fresh connections
                 {
-                    printf("Querias querias ... batatinhas com enguias\n");
+                    FD_CLR(fd_server, &rfds);
+
+                    newfd = Accept(fd_server, (struct sockaddr *)&addr_client, &addrlen);
+
+                    Read(newfd, message, MESSAGE_SIZE);
+                    sscanf(message, "NEW %s %s\n", new_node_ip, new_node_port); // neighbour information
+
+                    if (strlen(get_external_neighbour_ip()) == 0) // node without neighbours
+                    {   
+                        init(id);
+                        // set my contacts
+                        sprintf(message, "EXTERN %s %s\n", ip, port); // my recovery contact is ... myself
+                        set_external_and_recovery(new_node_ip, new_node_port, message, newfd);
+                    }
+                    else
+                    {
+                        add_internal_neighbour(new_node_ip, new_node_port, newfd);
+                    }
+                    // send my external contact
+                    sprintf(message, "EXTERN %s %s\n", get_external_neighbour_ip(), get_external_neighbour_tcp()); //envia o proprio contacto
+                    Write(newfd, message, strlen(message));
+                    // end of topology process
+
                 }
-                else if (strcmp(command, "show topology") == 0 || strcmp(command, "st") == 0) // Mostra os contactos do vizinho externo e do vizinho de recuperação.
+                else if((fd_neighbour = FD_ISKNOWN(&rfds)) != -1)   // known connection
                 {
-                    show_topology();
-                }
-                else if (strcmp(command, "show routing") == 0 || strcmp(command, "sr") == 0) // Mostra a tabela de expedição do nó.
-                {
-                    show_table();
-                }
-                else if (strcmp(command, "show cache") == 0 || strcmp(command, "sc") == 0) // Mostra os nomes dos objetos guardados na cache.
-                {
-                    printf("Querias querias ... batatinhas com enguias\n");
-                }
-                else if (strcmp(command, "leave") == 0) // Saída do nó da rede.
-                {
-                    printf("Querias querias ... batatinhas com enguias\n");
-                }
-                else if (strcmp(command, "exit") == 0) // Fecho da aplicação.
-                {
-                    sprintf(message, "UNREG %s %s %s", net, ip, port);
-                    send_udp_message(message);
-                    exit(0);
+                    FD_CLR(fd_neighbour, &rfds);
+                    Read(fd_neighbour, message, BUFFER_SIZE);
+                    sscanf(message, "ADVERTISE %s", id);
+                    update_table(fd_neighbour, id);
                 }
                 else
                 {
-                    printf("Invalid command. \n");
+                    printf("Entrei no Else no Select() princial\n");
                 }
             }
-            else if (FD_ISSET(fd_server, &rfds)) // fresh connections
-            {
-                //falta ver se ja esta na tabela pra criar ou nao um newfd
-
-                newfd = Accept(fd_server, (struct sockaddr *)&addr_client, &addrlen);
-
-                Read(newfd, message, BUFFER_SIZE);
-                sscanf(message, "NEW %s %s\n", new_node_ip, new_node_port); // neighbour information
-
-                if (strlen(get_external_neighbour_ip()) == 0) // node without neighbours
-                {
-                    // set my contacts
-                    sprintf(message, "EXTERN %s %s\n", ip, port); // my recovery contact is ... myself
-                    set_external_and_recovery(new_node_ip, new_node_port, message, newfd);
-                }
-                else
-                {
-                    add_internal_neighbour(new_node_ip, new_node_port, newfd);
-                }
-                // send my external contact
-                sprintf(message, "EXTERN %s %s\n", get_external_neighbour_ip(), get_external_neighbour_tcp()); //envia o proprio contacto
-                Write(newfd, message, strlen(message));
-                // end of topology process
-
-                Close(newfd);
-            }
-            else if((fd_neighbour = FD_ISKNOWN(&rfds)) != -1)   // known connection
-            {
-                Read(fd_neighbour, message, BUFFER_SIZE);
-                sscanf(message, "ADVERTISE %s", id);
-                update_table(fd_neighbour, id);
-            }
-            else
-            {
-                
-            }
-
-                       
-
             break;
         }
         case disconnecting:

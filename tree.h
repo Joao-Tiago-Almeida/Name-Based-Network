@@ -3,6 +3,8 @@
 
 #include "protocol_support.h"
 
+#define max(A,B) ((A)>=(B)?(A):(B))
+
 typedef struct resizable_vect RESIZABLE_VECT;
 
 void set_external_and_recovery(char *ip, char *tcp, char *recovery, int socket);
@@ -15,8 +17,9 @@ void show_topology();
 void show_table();
 void update_table(int fd, char* id);
 void init(char* id);
-void set_sockets(fd_set* rfds);
+int set_sockets(fd_set* rfds);
 int FD_ISKNOWN(fd_set *rfds);
 struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size);
+void close_node();
 
 #endif

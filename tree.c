@@ -76,22 +76,22 @@ void show_topology()
 void show_table()
 {
     char socket_[BUFFER_SIZE]; // auxiliar struct to remove -1 and replace to -
-    size_t n = 0;
+    // size_t n = 0;
 
-    printf("Adjacency Table\n\tid\t|\tsocket|\n");
+    printf("Adjacency Table\n\tid\t|\tsocket\t  |\n");
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
-        if ((n = strlen(((struct table *)NODE.table->item)[i].id)) != 0) // knows all information about the node
-        {
+        // if ((n = strlen(((struct table *)NODE.table->item)[i].id)) != 0) // knows all information about the node
+        // {
             // personalise personal socket
             sprintf(socket_, "%d", ((struct table *)NODE.table->item)[i].socket);
             if (strcmp(socket_, "-1") == 0) // found personal socket
                 sprintf(socket_, "-");
 
-            printf("\t%s\t|\t%s\t\n",
+            printf("\t%s\t|\t  %s\t  |\n",
                    ((struct table *)NODE.table->item)[i].id,
                    socket_);
-        }
+        // }
     }
 }
 
@@ -126,7 +126,7 @@ void update_table(int fd, char *id)
         if ((((struct table *)NODE.table->item)[i].socket == -1) || (((struct table *)NODE.table->item)[i].socket == fd))
             continue;
 
-        sprintf(message, "ADVERTISE %s", id);
+        sprintf(message, "ADVERTISE %s\n", id);
         Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
 
         // save the connection
@@ -147,7 +147,7 @@ void update_table(int fd, char *id)
                 if ((((struct table *)NODE.table->item)[j].socket == -1) || (i == j))
                     continue;
 
-                sprintf(message, "ADVERTISE %s", ((struct table *)NODE.table->item)[i].id);
+                sprintf(message, "ADVERTISE %s\n", ((struct table *)NODE.table->item)[i].id);
                 Write(fd, message, strlen(message));
             }
             direct_neighbour = true;
@@ -197,13 +197,21 @@ FD_SET()
               file descriptor that is already present in the set is a
               no-op, and does not produce an error.
  */
-void set_sockets(fd_set *rfds)
+int set_sockets(fd_set *rfds)
 {
+    if(NODE.table == NULL)  // does not have a table...
+        return -1;
+
+    int maxfd = 0;
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
-        if (((struct table *)NODE.table->item)[i].socket != -1)
-            FD_SET(((struct table *)NODE.table->item)[i].socket, rfds);
+        if (((struct table *)NODE.table->item)[i].socket == -1) // personal connection in the adjancency table
+           continue;
+
+        FD_SET(((struct table *)NODE.table->item)[i].socket, rfds);
+        maxfd = max(maxfd, ((struct table *)NODE.table->item)[i].socket);
     }
+    return maxfd;
 }
 
 // ensures that the vector has space
@@ -232,8 +240,22 @@ int FD_ISKNOWN(fd_set *rfds)
 {
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
-        if (FD_ISSET(((struct table *)NODE.table->item)[i].socket, rfds))
+        if (FD_ISSET(((struct table *)NODE.table->item)[i].socket, rfds)!=0)
             return ((struct table *)NODE.table->item)[i].socket;
     }
+    printf("Não está nada set né Zé\n");
     return -1;
+}
+
+void close_node()
+{
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if (((struct table *)NODE.table->item)[i].socket == -1) // personal connection in the adjancency table
+           continue;
+
+        Close(((struct table *)NODE.table->item)[i].socket);
+    }
+    free((struct table *)NODE.table->item);
+    free(NODE.table);
 }
