@@ -66,9 +66,9 @@ void network_interaction(char *ip, char *port)
     } state;
     state = lobby; // initial state
 
-    char buffer[MESSAGE_SIZE], command[MESSAGE_SIZE], net[BUFFER_SIZE], id[BUFFER_SIZE], bootIP[BUFFER_SIZE], bootTCP[BUFFER_SIZE], message[MESSAGE_SIZE + 1];
+    char buffer[MESSAGE_SIZE], command[MESSAGE_SIZE], net[BUFFER_SIZE], local_id[BUFFER_SIZE], bootIP[BUFFER_SIZE], bootTCP[BUFFER_SIZE], message[MESSAGE_SIZE + 1], id_or_name[BUFFER_SIZE];
     char new_node_ip[BUFFER_SIZE], new_node_port[BUFFER_SIZE]; // IP and TCP for a node that is already in the tree
-    int number_of_line_feed = 0;
+    int number_of_line_feed = 0, number_of_bytes_read=0;
     int fd_server, fd_client, fd_neighbour, newfd, n_select, maxfd=0;
     fd_set rfds;
     struct addrinfo hints, *res_server, *res_client;
@@ -90,6 +90,7 @@ void network_interaction(char *ip, char *port)
     addrlen = (socklen_t)sizeof(addr_client);
 
     bool is_connected = false;
+    bool advertise_connecting = false;
 
     while (1)
     {
@@ -112,7 +113,7 @@ void network_interaction(char *ip, char *port)
             }
             else if (strcmp(command, "join") == 0)
             {
-                int n = sscanf(buffer, "%*s %s %s %s %s", net, id, bootIP, bootTCP);
+                int n = sscanf(buffer, "%*s %s %s %s %s", net, local_id, bootIP, bootTCP);
                 //if(check_net(net)){ break; };
 
                 sprintf(message, "NODES %s", net);
@@ -157,12 +158,13 @@ void network_interaction(char *ip, char *port)
             if (Select(fd_client + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout)) // if time reach to the end, a = is returned
             {   
                 Read(fd_client, message, BUFFER_SIZE); // EXTERN IP TCP<LF>
-                init(id);
+                init(local_id);
                 set_external_and_recovery(bootIP, bootTCP, message, fd_client);
                 // Check if message received is OK  TODO
                 state = connected;
-                sprintf(message, "ADVERTISE %s\n", id);
+                sprintf(message, "ADVERTISE %s\n", local_id);
                 Write(fd_client, message, strlen(message)); // ADVERTISE IP TCP<LF>
+                advertise_connecting=true;  // will disable the response when it receives the first adversite 
             }
             else
                 state = lobby;
@@ -180,6 +182,8 @@ void network_interaction(char *ip, char *port)
                 printf("\t>\tshow cache    (sc)\n");
                 printf("\t>\tleave\n");
                 printf("\t>\texit\n\n");
+
+                init(local_id);
 
                 // Starting accepting incoming connections
                 Listen(fd_server);
@@ -210,11 +214,11 @@ void network_interaction(char *ip, char *port)
                     fgets(buffer, BUFFER_SIZE, stdin);
                     memset(command, '\0', MESSAGE_SIZE);
                     sscanf(buffer, "%s", command);
-                    if (strcmp(command, "create subname") == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
+                    if (strncmp(command, "create subname", 8) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
                     {
                         printf("Querias querias ... batatinhas com enguias\n");
                     }
-                    else if (strcmp(command, "get name") == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
+                    else if (strncmp(command, "get name", 4) == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
                     {
                         printf("Querias querias ... batatinhas com enguias\n");
                     }
@@ -232,7 +236,11 @@ void network_interaction(char *ip, char *port)
                     }
                     else if (strcmp(command, "leave") == 0) // Saída do nó da rede.
                     {
-                        printf("Querias querias ... batatinhas com enguias\n");
+                        sprintf(message, "UNREG %s %s %s", net, ip, port);
+                        send_udp_message(message);
+                        close_node();
+                        Close(fd_server);
+                        state=lobby;
                     }
                     else if (strcmp(command, "exit") == 0) // Fecho da aplicação.
                     {
@@ -258,7 +266,6 @@ void network_interaction(char *ip, char *port)
 
                     if (strlen(get_external_neighbour_ip()) == 0) // node without neighbours
                     {   
-                        init(id);
                         // set my contacts
                         sprintf(message, "EXTERN %s %s\n", ip, port); // my recovery contact is ... myself
                         set_external_and_recovery(new_node_ip, new_node_port, message, newfd);
@@ -276,13 +283,38 @@ void network_interaction(char *ip, char *port)
                 else if((fd_neighbour = FD_ISKNOWN(&rfds)) != -1)   // known connection
                 {
                     FD_CLR(fd_neighbour, &rfds);
-                    Read(fd_neighbour, message, BUFFER_SIZE);
-                    sscanf(message, "ADVERTISE %s", id);
-                    update_table(fd_neighbour, id);
+                    number_of_bytes_read = Read(fd_neighbour, message, BUFFER_SIZE);
+                    if(number_of_bytes_read==0)
+                    {
+                        withdraw_update_table(fd_neighbour, id_or_name, true);  
+                        Close(fd_neighbour);
+                        continue;
+                    }
+
+                    sscanf(message, "%s %s", command, id_or_name); 
+
+                    if(strcmp(command, "ADVERTISE") == 0)   //  Anúncio do nó com identificador id.
+                    {
+                        advertise_update_table(fd_neighbour, id_or_name, &advertise_connecting);
+                    }
+                    else if(strcmp(command, "WITHDRAW") == 0)   //  Retirada do nó com identificador id.
+                    {
+                        withdraw_update_table(fd_neighbour, id_or_name, false);
+                    }
+                    else if(strcmp(command, "INTEREST") == 0)   //  Pesquisa do objeto com nome name.
+                    {
+                    }
+                    else if(strcmp(command, "DATA") == 0)   //  Entrega do objeto com nome name.
+                    {
+                    }
+                    else if(strcmp(command, "NODATA") == 0) // Informação de que o objeto com nome name não existe.
+                    {
+                    }
+                    
                 }
                 else
                 {
-                    printf("Entrei no Else no Select() princial\n");
+                    printf("Entrei no Else no Select() principal\n");
                 }
             }
             break;

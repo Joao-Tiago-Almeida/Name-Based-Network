@@ -109,13 +109,14 @@ int Listen(int sockfd)
 }
 
 ssize_t Read(int fd, void *buf, size_t count)
-{   
-    char line[BUFFER_SIZE];
+{
+    char character[2]; count = 1;
     int n, n_total = 0;
     memset(buf, '\0', MESSAGE_SIZE);
+
     do
     {
-        n = read(fd, line, count);
+        n = read(fd, character, 1);
         if (n == -1)
         {
             fprintf(stderr, "Error in Read(): %s\n", strerror(errno));
@@ -123,13 +124,12 @@ ssize_t Read(int fd, void *buf, size_t count)
             exit(1);
         }
         n_total = n_total+n;
-        
-        for(int i=0; i<n; i++)
-            sprintf(buf, "%s%c", buf, line[i]);
 
-    } while (get_number_of_LF(line)==0 && n!=0);
+        sprintf(buf, "%s%c", buf, character[0]);
 
-    printf("You received a %d:%d Bytes message: %s\n", n_total, (int)strlen(buf), buf);
+    } while (character[0]!='\n' && n!=0);
+
+    printf("You received from %d a %d:%d Bytes message: %s\n", fd, n_total, (int)strlen(buf), buf);
     return n_total;
 }
 
@@ -142,7 +142,7 @@ ssize_t Write(int fd, const void *buf, size_t count)
         Close(fd);
         exit(1);
     }
-    printf("You wrote a %d:%d Bytes message: %s\n", n, (int)strlen(buf), buf);
+    printf("You wrote to %d a %d:%d Bytes message: %s\n", fd, n, (int)strlen(buf), buf);
     return n;
 }
 
