@@ -158,7 +158,7 @@ void network_interaction(char *ip, char *port)
             FD_SET(fd_client, &rfds);
             if (Select(fd_client + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout)) // if time reach to the end, a = is returned
             {   
-                Read(fd_client, message, BUFFER_SIZE); // EXTERN IP TCP<LF>
+                Read(fd_client, message); // EXTERN IP TCP<LF>
                 node_init(local_id);
                 set_external_and_recovery(bootIP, bootTCP, message, fd_client);
                 // Check if message received is OK  TODO
@@ -266,7 +266,7 @@ void network_interaction(char *ip, char *port)
 
                     newfd = Accept(fd_server, (struct sockaddr *)&addr_client, &addrlen);
 
-                    Read(newfd, message, MESSAGE_SIZE);
+                    Read(newfd, message);
                     sscanf(message, "NEW %s %s\n", new_node_ip, new_node_port); // neighbour information
 
                     if (strlen(get_external_neighbour_ip()) == 0) // node without neighbours
@@ -288,7 +288,7 @@ void network_interaction(char *ip, char *port)
                 else if((fd_neighbour = FD_ISKNOWN(&rfds)) != -1)   // known connection
                 {
                     FD_CLR(fd_neighbour, &rfds);
-                    number_of_bytes_read = Read(fd_neighbour, message, BUFFER_SIZE);
+                    number_of_bytes_read = Read(fd_neighbour, message);
                     if(number_of_bytes_read==0) // TODO change to is_connected()
                     {
                         withdraw_update_table(fd_neighbour, id_or_name, true);  

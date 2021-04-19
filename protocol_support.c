@@ -108,7 +108,7 @@ int Listen(int sockfd)
     return n;
 }
 
-ssize_t Read(int fd, void *buf, size_t count)
+ssize_t Read(int fd, void *buf)
 {
     char character[2]; count = 1;
     int n, n_total = 0;
