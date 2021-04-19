@@ -80,3 +80,22 @@ int get_number_of_LF(char *string)
     }
     return count;
 }
+
+
+bool break_name_into_id_and_subname(char *str, char *id, char* subname)
+{
+    int i=0;
+    memset(id, '\0', strlen(id));
+    memset(subname, '\0', strlen(subname));
+    for (int k=0; k<(int)strlen(str);k++)
+    {
+
+        if(str[k]=='.')
+            i = 1;
+        else if(i==0)
+            id[strlen(id)] = str[k];
+        else
+            subname[strlen(subname)] = str[k];
+    }
+    return (strlen(id) != 0 && strlen(subname) != 0);
+}

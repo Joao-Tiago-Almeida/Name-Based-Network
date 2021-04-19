@@ -16,5 +16,6 @@ bool check_net(char *net);
 int get_number_of_LF(char *string);
 void *checked_calloc(size_t nitems, size_t size);
 void *checked_realloc(void *ptr, size_t size);
+bool break_name_into_id_and_subname(char *str, char *id, char* subname);
 
 #endif

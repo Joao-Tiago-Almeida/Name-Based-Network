@@ -85,7 +85,7 @@ bool send_udp_message(char *message)
     Getaddrinfo(NET.regIP, NET.regUDP, &hints, &res);
 
     n_sent = sendto(fd_udp, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
-    // printf("%s\n", message);
+    printf("Sent UDP to %s:%s -> %s\n",NET.regIP, NET.regUDP, message);
 
     return true;
 }
@@ -112,8 +112,10 @@ void receive_udp_message(char *message)
         n_received = Recvfrom(fd_udp, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&addr, &addrlen);
 
         // desencrypt
-        memset(message, '\0', BUFFER_SIZE);
-        sprintf(message, "%s", buffer);
+        memset(message, '\0', MESSAGE_SIZE);
+        for(int j=0; j<MESSAGE_SIZE && j<n_received; j++)
+            message[j] = buffer[j];
+
     }
     // write(1, buffer, n_received);
     // printf("\n\n");

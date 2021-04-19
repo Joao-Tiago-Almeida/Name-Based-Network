@@ -1,12 +1,20 @@
 #include "tree.h"
 
 #define ALLOCATION_OFFSET 2
+#define CACHE_SIZE 5
 
 // camada da topologia
 struct contact
 {
     char ip[16];
     char tcp[6];
+};
+
+struct cache_node
+{
+    char subname[BUFFER_SIZE];
+    struct cache_node *next;
+    struct cache_node *previous;
 };
 
 // camada do encaminhamento
@@ -23,6 +31,12 @@ struct resizable_vect
     unsigned int max_size;
 };
 
+struct message_path
+{
+    int socket;
+    char name[BUFFER_SIZE];
+};
+
 struct node
 {
     // camada da topologia
@@ -33,6 +47,9 @@ struct node
 
     // camda do encaminhamento
     struct resizable_vect *table;
+    struct cache_node *head;
+    struct cache_node *tail;
+    struct resizable_vect *income_messages; 
 };
 struct node NODE; // only one node per application
 
@@ -228,7 +245,7 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
 
             // save the connection
             diferent_sockets[number_diferent_sockets++] = ((struct table *)NODE.table->item)[i].socket;
-        }       
+        }
     }
     else
     {
@@ -239,7 +256,7 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
             if (((struct table *)NODE.table->item)[i].socket == -1)
                 continue;
 
-            if (strcmp(((struct table *)NODE.table->item)[i].id, id)==0)
+            if (strcmp(((struct table *)NODE.table->item)[i].id, id) == 0)
             {
                 // put the last element in the new free place
                 ((struct table *)NODE.table->item)[i].socket = ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket;
@@ -251,7 +268,7 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
                 i--;
             }
             else if (((struct table *)NODE.table->item)[i].socket != fd) // update the other connections
-            {   
+            {
                 send_withdraw = true;
                 // iterates over connections who were already sent a message
                 for (int j = 0; j < number_diferent_sockets; j++)
@@ -277,7 +294,7 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
     free(exit_id);
 }
 
-void init(char *id)
+void node_init(char *id)
 {
     if (NODE.table != NULL)
         return;
@@ -286,6 +303,8 @@ void init(char *id)
 
     ((struct table *)NODE.table->item)[0].socket = -1;
     sprintf(((struct table *)NODE.table->item)[0].id, "%s", id);
+
+    init_cache();
 }
 
 char *get_external_neighbour_ip()
@@ -317,7 +336,6 @@ int set_sockets(fd_set *rfds)
         return -1;
 
     int maxfd = 0;
-
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
         if (((struct table *)NODE.table->item)[i].socket == -1) // personal connection in the adjancency table
@@ -361,8 +379,160 @@ int FD_ISKNOWN(fd_set *rfds)
     return -1;
 }
 
+void init_cache()
+{
+    //head vai ser o mais recentemente utilizado
+    NODE.head = NULL;
+    //tail vai ser o que não é utilizado há mais tempo
+    NODE.tail = NULL;
+
+    for (int i = 0; i < CACHE_SIZE; i++)
+    {
+        struct cache_node *new_node = (struct cache_node *)checked_calloc(1, sizeof(struct cache_node));
+        sprintf(new_node->subname, "");
+        new_node->next = NODE.head;
+        new_node->previous = NULL;
+        if (NODE.head != NULL)
+            NODE.head->previous = new_node;
+        NODE.head = new_node;
+        //como estou a adicionar no início a tail vai ser o primeiro elemento a ser adicionado
+        if (i == 0)
+            NODE.tail = NODE.head;
+    }
+}
+
+// LSR
+void update_cache(char *subname)
+{       
+    struct cache_node *ptr = search_my_cache(subname);
+    if(ptr==NULL)   // object does not exist in my cache
+    {
+        sprintf(NODE.tail->subname, "%s", subname);
+        // criar ligações
+        NODE.tail->next = NODE.head;
+        NODE.head->previous=NODE.tail;
+        // atualizar ponteiros
+        NODE.tail = NODE.tail->previous;
+        NODE.head=NODE.head->previous;
+        // quebrar ligações
+        NODE.tail->next=NULL;
+        NODE.head->previous=NULL;
+    }
+    else    
+    {   
+        // Remove from the middle
+        if(ptr->previous==NULL) // it already is the recently
+            return;
+
+        ptr->previous->next = ptr->next;
+        ptr->next->previous = ptr->previous;
+        // According to the Least Recently Used(LRU)
+        ptr->next = NODE.head;
+        ptr->previous = NULL;
+        // update HEAD
+        NODE.head->previous = ptr;
+        NODE.head = ptr;
+    }
+}
+
+void search_object(char *name, int socket, bool waiting_for_object)
+{   
+    char id[BUFFER_SIZE];
+    char subname[BUFFER_SIZE];
+    char message[MESSAGE_SIZE];
+
+    bool valid_name = break_name_into_id_and_subname(name, id, subname);
+    if(!valid_name)
+    {
+        printf("The name you entered is not valid, try again soldier.\n");
+        return;
+    }
+
+    // search in my own cache
+    struct cache_node * ptr = search_my_cache(subname);
+    if(ptr != NULL)
+    {
+        if(waiting_for_object)
+        {
+            sprintf(message, "DATA %s.%s\n", id, subname);
+            Write(socket, message, strlen(message));
+        }
+        else
+        {
+            sprintf(message, "%s", subname);
+            printf("I received an object titled: '%s'.\n", subname);
+        }
+        update_cache(message);
+    }
+
+    // I am the one to whom the message was intended, if I did not find the object the search will end unsuccessfully
+    if(strcmp(id, ((struct table *)NODE.table->item)[0].id)==0)
+    {
+        sprintf(message, "NODATA %s.%s\n", id, subname);
+        Write(socket, message, strlen(message));
+        return;
+    }
+
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {   
+        if(strcmp(((struct table *)NODE.table->item)[i].id, id != 0))
+            continue;
+
+        sprintf(message, "INTEREST %s.%s\n", id, subname);
+        Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
+
+        NODE.income_messages = add_item_checkup(NODE.income_messages, sizeof(struct message_path));
+        ((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].socket = socket;
+        sprintf(((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].name, "%s", subname);   
+    }
+        
+}
+
+void show_cache()
+{
+    struct cache_node* ptr=NODE.head;
+    int count = 0;
+
+    printf("Cache\n");
+    while(ptr!=NULL)
+    {   
+        if(strlen(ptr->subname)!=0)
+            printf("%d. %s\n", ++count, ptr->subname);
+
+        ptr=ptr->next;
+    }
+    printf("OCCUPANCY: %d\t CACHE_SIZE: %d\n", count, CACHE_SIZE);
+}
+
+struct cache_node *search_my_cache(char *subname)
+{
+    struct cache_node* ptr=NODE.head;
+
+    while(ptr!=NULL)
+    {   
+        if(strcmp(subname, ptr->subname)==0)    // found subname
+            return ptr;
+        ptr=ptr->next;
+    }
+    return NULL;
+}
+
+int get_waiting_node(char* name)
+{
+    for (unsigned int i = 0; i < NODE.income_messages->occupancy; i++)
+    {
+        if(strcmp(name, ((struct message_path *)NODE.income_messages->item)[i].name))
+            continue;
+        
+        return i;
+    }
+    return -1;
+}
+
 void close_node()
 {
+
+    // close all sockets
     int *diferent_sockets = checked_calloc(NODE.table->occupancy - 1, sizeof(int)); // worst case
     int number_diferent_sockets = 0;
 
@@ -376,8 +546,18 @@ void close_node()
             }
         }
     }
-
     free(diferent_sockets);
     free((struct table *)NODE.table->item);
     free(NODE.table);
+    NODE.table = NULL;
+
+    // free cache
+   struct cache_node* tmp;
+
+   while (NODE.head != NULL)
+    {
+       tmp = NODE.head;
+       NODE.head = NODE.head->next;
+       free(tmp);
+    }
 }

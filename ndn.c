@@ -102,12 +102,14 @@ void network_interaction(char *ip, char *port)
             printf("\t>\tjoin net id\n");
             printf("\t>\tjoin net id bootIP bootTCP\n");
             printf("\t>\texit\n\n");
-            fgets(buffer, BUFFER_SIZE, stdin);
+            memset(buffer, '\0', MESSAGE_SIZE);
+            fgets(buffer, MESSAGE_SIZE, stdin);
             sscanf(buffer, "%s", command);
             if (strcmp(command, "exit") == 0)
             {
                 freeaddrinfo(res_server);
                 Close(fd_server);
+                Close(fd_client);
                 printf("See you later alligator!\n");
                 exit(0);
             }
@@ -115,7 +117,6 @@ void network_interaction(char *ip, char *port)
             {
                 int n = sscanf(buffer, "%*s %s %s %s %s", net, local_id, bootIP, bootTCP);
                 //if(check_net(net)){ break; };
-
                 sprintf(message, "NODES %s", net);
                 send_udp_message(message);
                 receive_udp_message(message);
@@ -138,6 +139,7 @@ void network_interaction(char *ip, char *port)
                     printf("Invalid command. \n");
                     break;
                 }
+                
                 if (check_IP(bootIP) && check_port(bootTCP))
                 {
                     state = connecting;
@@ -158,7 +160,7 @@ void network_interaction(char *ip, char *port)
             if (Select(fd_client + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout)) // if time reach to the end, a = is returned
             {   
                 Read(fd_client, message, BUFFER_SIZE); // EXTERN IP TCP<LF>
-                init(local_id);
+                node_init(local_id);
                 set_external_and_recovery(bootIP, bootTCP, message, fd_client);
                 // Check if message received is OK  TODO
                 state = connected;
@@ -183,7 +185,7 @@ void network_interaction(char *ip, char *port)
                 printf("\t>\tleave\n");
                 printf("\t>\texit\n\n");
 
-                init(local_id);
+                node_init(local_id);
 
                 // Starting accepting incoming connections
                 Listen(fd_server);
@@ -211,48 +213,53 @@ void network_interaction(char *ip, char *port)
                 if (FD_ISSET(STDIN_FILENO, &rfds)) // stdin
                 {
                     FD_CLR(STDIN_FILENO, &rfds);
+                    memset(buffer, '\0', MESSAGE_SIZE);
                     fgets(buffer, BUFFER_SIZE, stdin);
-                    memset(command, '\0', MESSAGE_SIZE);
-                    sscanf(buffer, "%s", command);
-                    if (strncmp(command, "create subname", 8) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
-                    {
-                        printf("Querias querias ... batatinhas com enguias\n");
+                    buffer[strlen(buffer)-1] = '\0';    // replace \n
+                    if (strncmp(buffer, "create subname", 7) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
+                    {   
+                        sscanf(buffer, "%*s %s", message);
+                        update_cache(message);
                     }
-                    else if (strncmp(command, "get name", 4) == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
+                    else if (strncmp(buffer, "get name", 4) == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
                     {
-                        printf("Querias querias ... batatinhas com enguias\n");
+                        sscanf(buffer, "%*s %s", message);
+                        search_object(message, STDOUT_FILENO, false);
                     }
-                    else if (strcmp(command, "show topology") == 0 || strcmp(command, "st") == 0) // Mostra os contactos do vizinho externo e do vizinho de recuperação.
+                    else if (strcmp(buffer, "show topology") == 0 || strcmp(buffer, "st") == 0) // Mostra os contactos do vizinho externo e do vizinho de recuperação.
                     {
                         show_topology();
                     }
-                    else if (strcmp(command, "show routing") == 0 || strcmp(command, "sr") == 0) // Mostra a tabela de expedição do nó.
+                    else if (strcmp(buffer, "show routing") == 0 || strcmp(buffer, "sr") == 0) // Mostra a tabela de expedição do nó.
                     {
                         show_table();
                     }
-                    else if (strcmp(command, "show cache") == 0 || strcmp(command, "sc") == 0) // Mostra os nomes dos objetos guardados na cache.
+                    else if (strcmp(buffer, "show cache") == 0 || strcmp(buffer, "sc") == 0) // Mostra os nomes dos objetos guardados na cache.
                     {
-                        printf("Querias querias ... batatinhas com enguias\n");
+                        show_cache();
                     }
-                    else if (strcmp(command, "leave") == 0) // Saída do nó da rede.
+                    else if (strcmp(buffer, "leave") == 0) // Saída do nó da rede.
                     {
                         sprintf(message, "UNREG %s %s %s", net, ip, port);
                         send_udp_message(message);
+                        receive_udp_message(message);
                         close_node();
-                        Close(fd_server);
+                        is_connected = false;
                         state=lobby;
                     }
-                    else if (strcmp(command, "exit") == 0) // Fecho da aplicação.
+                    else if (strcmp(buffer, "exit") == 0) // Fecho da aplicação.
                     {
                         sprintf(message, "UNREG %s %s %s", net, ip, port);
                         send_udp_message(message);
+                        receive_udp_message(message);
                         close_node();
                         Close(fd_server);
+                        Close(fd_client);
                         exit(0);
                     }
                     else
                     {
-                        printf("Invalid command. \n");
+                        printf("Invalid command: '%s'.\n", buffer);
                     }
                 }
                 else if (FD_ISSET(fd_server, &rfds)) // fresh connections
