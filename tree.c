@@ -401,6 +401,145 @@ void init_cache()
     }
 }
 
+void search_object(char *name, int socket, bool waiting_for_object)
+{   
+    char id[BUFFER_SIZE];
+    char subname[BUFFER_SIZE];
+    char message[MESSAGE_SIZE];
+    bool id_in_my_table = false;
+
+    bool valid_name = break_name_into_id_and_subname(name, id, subname);
+    if(!valid_name)
+    {
+        printf("The name '%s' you entered is not valid, try again soldier.\n", name);
+        return;
+    }
+
+    // validate the id
+    for(unsigned int i=0; i<NODE.table->occupancy; i++){
+        if(strcmp(((struct table *)NODE.table->item)[i].id,id)!=0)
+            continue;
+
+        id_in_my_table = true;
+        break;
+    }
+    if(!id_in_my_table)
+    {
+        printf("The id: '%s' is not in my bucket list...\n", id);
+        return;
+    }
+
+    // search in my own cache
+    struct cache_node * ptr = search_my_cache(subname);
+    if(ptr != NULL) // found it
+    {
+        if(waiting_for_object)
+        {
+            sprintf(message, "DATA %s.%s\n", id, subname);
+            Write(socket, message, strlen(message));
+        }
+        else
+        {
+            printf("I received an object titled: '%s'.\n", subname);
+        }
+        update_cache(subname);
+        return; 
+    }
+
+    // I am the one to whom the message was intended, if I did not find the object the search will end unsuccessfully
+    if(strcmp(id, ((struct table *)NODE.table->item)[0].id)==0)
+    {
+        sprintf(message, "NODATA %s.%s\n", id, subname);
+        Write(socket, message, strlen(message));
+        return;
+    }
+
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {   
+        if(strcmp(((struct table *)NODE.table->item)[i].id, id) != 0)
+            continue;
+
+        sprintf(message, "INTEREST %s.%s\n", id, subname);
+        Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
+
+        NODE.income_messages = add_item_checkup(NODE.income_messages, sizeof(struct message_path));
+        ((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].socket = socket;
+        sprintf(((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].name, "%s", name);   
+        printf("add income message: socket-%d-name-%s\n", socket, name);
+    }
+        
+}
+
+void return_search(char *command, char *name)
+{   
+    char id[BUFFER_SIZE];
+    char subname[BUFFER_SIZE];
+    char message[MESSAGE_SIZE];
+
+    bool valid_name = break_name_into_id_and_subname(name, id, subname);
+    if(!valid_name)
+    {
+        printf("The name '%s' you entered is not valid, try again soldier.\n", name);
+        return;
+    }
+
+    // save the object if it receives a DATA message
+    if(strcmp(command, "DATA")==0)
+    {
+        update_cache(subname);
+    }
+
+    int socket = -1;
+
+    // search for the loop back path according to the message
+    for (unsigned int i = 0; i < NODE.income_messages->occupancy; i++)
+    {
+        if(strcmp(name, ((struct message_path *)NODE.income_messages->item)[i].name))
+            continue;
+        
+        printf("out income message: socket-%d-name-%s\n", ((struct message_path *)NODE.income_messages->item)[i].socket, ((struct message_path *)NODE.income_messages->item)[i].name);
+        NODE.income_messages->occupancy--;
+        socket = ((struct message_path *)NODE.income_messages->item)[i].socket;
+        break;
+    }
+
+    if(socket==-1)
+    {
+        printf("I do not have any transcript of the message: '%s'.\n", name);
+        return;
+    }
+
+    if(socket == STDOUT_FILENO)
+    {
+        if(strcmp(command, "DATA")==0)
+            printf("Gottcha, your Pokemon: '%s' is ready now!\n", subname);
+        else
+            printf("Even though I had a tough time searching for the needle in the haystack, it is still missing :'(\n");
+    }
+    else
+    {
+        sprintf(message, "%s %s.%s\n", command, id, subname);
+        Write(socket, message, strlen(message));
+    }
+
+}
+
+void show_cache()
+{
+    struct cache_node* ptr=NODE.head;
+    int count = 0;
+
+    printf("Cache\n");
+    while(ptr!=NULL)
+    {   
+        if(strlen(ptr->subname)!=0)
+            printf("%d. %s\n", ++count, ptr->subname);
+
+        ptr=ptr->next;
+    }
+    printf("OCCUPANCY: %d\t CACHE_SIZE: %d\n", count, CACHE_SIZE);
+}
+
 // LSR
 void update_cache(char *subname)
 {       
@@ -435,75 +574,6 @@ void update_cache(char *subname)
     }
 }
 
-void search_object(char *name, int socket, bool waiting_for_object)
-{   
-    char id[BUFFER_SIZE];
-    char subname[BUFFER_SIZE];
-    char message[MESSAGE_SIZE];
-
-    bool valid_name = break_name_into_id_and_subname(name, id, subname);
-    if(!valid_name)
-    {
-        printf("The name you entered is not valid, try again soldier.\n");
-        return;
-    }
-
-    // search in my own cache
-    struct cache_node * ptr = search_my_cache(subname);
-    if(ptr != NULL)
-    {
-        if(waiting_for_object)
-        {
-            sprintf(message, "DATA %s.%s\n", id, subname);
-            Write(socket, message, strlen(message));
-        }
-        else
-        {
-            sprintf(message, "%s", subname);
-            printf("I received an object titled: '%s'.\n", subname);
-        }
-        update_cache(message);
-    }
-
-    // I am the one to whom the message was intended, if I did not find the object the search will end unsuccessfully
-    if(strcmp(id, ((struct table *)NODE.table->item)[0].id)==0)
-    {
-        sprintf(message, "NODATA %s.%s\n", id, subname);
-        Write(socket, message, strlen(message));
-        return;
-    }
-
-    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
-    {   
-        if(strcmp(((struct table *)NODE.table->item)[i].id, id != 0))
-            continue;
-
-        sprintf(message, "INTEREST %s.%s\n", id, subname);
-        Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
-
-        NODE.income_messages = add_item_checkup(NODE.income_messages, sizeof(struct message_path));
-        ((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].socket = socket;
-        sprintf(((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].name, "%s", subname);   
-    }
-        
-}
-
-void show_cache()
-{
-    struct cache_node* ptr=NODE.head;
-    int count = 0;
-
-    printf("Cache\n");
-    while(ptr!=NULL)
-    {   
-        if(strlen(ptr->subname)!=0)
-            printf("%d. %s\n", ++count, ptr->subname);
-
-        ptr=ptr->next;
-    }
-    printf("OCCUPANCY: %d\t CACHE_SIZE: %d\n", count, CACHE_SIZE);
-}
-
 struct cache_node *search_my_cache(char *subname)
 {
     struct cache_node* ptr=NODE.head;
@@ -517,35 +587,36 @@ struct cache_node *search_my_cache(char *subname)
     return NULL;
 }
 
-int get_waiting_node(char* name)
-{
-    for (unsigned int i = 0; i < NODE.income_messages->occupancy; i++)
-    {
-        if(strcmp(name, ((struct message_path *)NODE.income_messages->item)[i].name))
-            continue;
-        
-        return i;
-    }
-    return -1;
-}
-
 void close_node()
 {
-
     // close all sockets
     int *diferent_sockets = checked_calloc(NODE.table->occupancy - 1, sizeof(int)); // worst case
     int number_diferent_sockets = 0;
+    bool close_socket = true;
 
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
+        // local socket
+        if (((struct table *)NODE.table->item)[i].socket == -1)
+            continue;
+
         for (int j = 0; j < number_diferent_sockets; j++)
         {
             if (((struct table *)NODE.table->item)[i].socket == diferent_sockets[j])
             {
-                Close(((struct table *)NODE.table->item)[i].socket);
+                close_socket = false;
+                break;
             }
         }
+        if (!close_socket)
+            continue;
+        
+        Close(((struct table *)NODE.table->item)[i].socket);
+
+        // save the connection
+        diferent_sockets[number_diferent_sockets++] = ((struct table *)NODE.table->item)[i].socket;
     }
+
     free(diferent_sockets);
     free((struct table *)NODE.table->item);
     free(NODE.table);

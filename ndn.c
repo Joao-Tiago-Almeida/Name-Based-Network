@@ -77,7 +77,6 @@ void network_interaction(char *ip, char *port)
     struct timeval timeout = {2 /*seconds*/, 0 /*milliseconds*/}; // TODO alterar, pq nao sabemos onde a sessão está
 
     fd_server = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    fd_client = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;       //IPv4
@@ -109,7 +108,6 @@ void network_interaction(char *ip, char *port)
             {
                 freeaddrinfo(res_server);
                 Close(fd_server);
-                Close(fd_client);
                 printf("See you later alligator!\n");
                 exit(0);
             }
@@ -151,6 +149,7 @@ void network_interaction(char *ip, char *port)
         case connecting:
         {
             printf("[CONNECTING] Waiting for connection confirmation.\n");
+            fd_client = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
             Getaddrinfo(bootIP, bootTCP, &hints, &res_client);
             Connect(fd_client, res_client->ai_addr, res_client->ai_addrlen);
             sprintf(message, "NEW %s %s\n", ip, port);
@@ -254,7 +253,6 @@ void network_interaction(char *ip, char *port)
                         receive_udp_message(message);
                         close_node();
                         Close(fd_server);
-                        Close(fd_client);
                         exit(0);
                     }
                     else
@@ -291,7 +289,7 @@ void network_interaction(char *ip, char *port)
                 {
                     FD_CLR(fd_neighbour, &rfds);
                     number_of_bytes_read = Read(fd_neighbour, message, BUFFER_SIZE);
-                    if(number_of_bytes_read==0)
+                    if(number_of_bytes_read==0) // TODO change to is_connected()
                     {
                         withdraw_update_table(fd_neighbour, id_or_name, true);  
                         Close(fd_neighbour);
@@ -299,7 +297,6 @@ void network_interaction(char *ip, char *port)
                     }
 
                     sscanf(message, "%s %s", command, id_or_name); 
-
                     if(strcmp(command, "ADVERTISE") == 0)   //  Anúncio do nó com identificador id.
                     {
                         advertise_update_table(fd_neighbour, id_or_name, &advertise_connecting);
@@ -310,14 +307,12 @@ void network_interaction(char *ip, char *port)
                     }
                     else if(strcmp(command, "INTEREST") == 0)   //  Pesquisa do objeto com nome name.
                     {
+                        search_object(id_or_name, fd_neighbour, true);
                     }
-                    else if(strcmp(command, "DATA") == 0)   //  Entrega do objeto com nome name.
+                    else if(strcmp(command, "DATA") == 0 || strcmp(command, "NODATA") == 0)   //  Entrega do objeto com nome name.
                     {
+                        return_search(command, id_or_name);
                     }
-                    else if(strcmp(command, "NODATA") == 0) // Informação de que o objeto com nome name não existe.
-                    {
-                    }
-                    
                 }
                 else
                 {

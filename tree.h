@@ -22,7 +22,7 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw);
 void init_cache();
 void update_cache(char* subname);
 void search_object(char *subname, int socket, bool waiting_for_object);
-int get_waiting_node(char* name);
+void return_search(char *command, char *name);
 struct cache_node *search_my_cache(char* subname);
 void node_init(char* id);
 int set_sockets(fd_set* rfds);

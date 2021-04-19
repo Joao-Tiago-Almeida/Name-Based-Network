@@ -78,7 +78,7 @@ void Close(int fildes)
     int n = close(fildes);
     if (n == -1)
     {
-        fprintf(stderr, "Error in Close(): %s\n", strerror(errno));
+        fprintf(stderr, "Error in Close(%d): %s\n",fildes, strerror(errno));
         exit(1);
     }
 }

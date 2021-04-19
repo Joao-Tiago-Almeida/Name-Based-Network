@@ -117,7 +117,7 @@ void receive_udp_message(char *message)
             message[j] = buffer[j];
 
     }
-    // write(1, buffer, n_received);
+    // write(STDOUT_FILENO, buffer, n_received);
     // printf("\n\n");
 }
 
