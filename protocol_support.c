@@ -89,7 +89,7 @@ int Select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
     if (n == -1)
     {
-        fprintf(stderr, "Error in Select(): %s\n", strerror(errno));
+        fprintf(stderr, "Error in Select(%d): %s\n", n, strerror(errno));
         // Close(nfds); TODO
         exit(1);
     }
@@ -101,7 +101,7 @@ int Listen(int sockfd)
     int n = listen(sockfd, 5);
     if (n == -1)
     {
-        fprintf(stderr, "Error in Listen(): %s\n", strerror(errno));
+        fprintf(stderr, "Error in Listen(%d): %s\n", sockfd, strerror(errno));
         Close(sockfd);
         exit(1);
     }
@@ -110,7 +110,7 @@ int Listen(int sockfd)
 
 ssize_t Read(int fd, void *buf)
 {
-    char character[2]; count = 1;
+    char character[2];
     int n, n_total = 0;
     memset(buf, '\0', MESSAGE_SIZE);
 

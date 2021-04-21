@@ -75,6 +75,7 @@ void network_interaction(char *ip, char *port)
     struct sockaddr_in addr_client;
     socklen_t addrlen;
     struct timeval timeout = {2 /*seconds*/, 0 /*milliseconds*/}; // TODO alterar, pq nao sabemos onde a sessão está
+    bool needs_to_connect=false;
 
     fd_server = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
 
@@ -89,7 +90,6 @@ void network_interaction(char *ip, char *port)
     addrlen = (socklen_t)sizeof(addr_client);
 
     bool is_connected = false;
-    bool advertise_connecting = false;
 
     while (1)
     {
@@ -114,7 +114,6 @@ void network_interaction(char *ip, char *port)
             else if (strcmp(command, "join") == 0)
             {
                 int n = sscanf(buffer, "%*s %s %s %s %s", net, local_id, bootIP, bootTCP);
-                //if(check_net(net)){ break; };
                 sprintf(message, "NODES %s", net);
                 send_udp_message(message);
                 receive_udp_message(message);
@@ -137,7 +136,7 @@ void network_interaction(char *ip, char *port)
                     printf("Invalid command. \n");
                     break;
                 }
-                
+
                 if (check_IP(bootIP) && check_port(bootTCP))
                 {
                     state = connecting;
@@ -159,13 +158,11 @@ void network_interaction(char *ip, char *port)
             if (Select(fd_client + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout)) // if time reach to the end, a = is returned
             {   
                 Read(fd_client, message); // EXTERN IP TCP<LF>
-                node_init(local_id);
+                node_init(local_id, ip, port);
                 set_external_and_recovery(bootIP, bootTCP, message, fd_client);
                 // Check if message received is OK  TODO
+                send_my_table(fd_client);
                 state = connected;
-                sprintf(message, "ADVERTISE %s\n", local_id);
-                Write(fd_client, message, strlen(message)); // ADVERTISE IP TCP<LF>
-                advertise_connecting=true;  // will disable the response when it receives the first adversite 
             }
             else
                 state = lobby;
@@ -184,7 +181,7 @@ void network_interaction(char *ip, char *port)
                 printf("\t>\tleave\n");
                 printf("\t>\texit\n\n");
 
-                node_init(local_id);
+                node_init(local_id, ip, port);
 
                 // Starting accepting incoming connections
                 Listen(fd_server);
@@ -280,8 +277,9 @@ void network_interaction(char *ip, char *port)
                         add_internal_neighbour(new_node_ip, new_node_port, newfd);
                     }
                     // send my external contact
-                    sprintf(message, "EXTERN %s %s\n", get_external_neighbour_ip(), get_external_neighbour_tcp()); //envia o proprio contacto
+                    sprintf(message, "EXTERN %s %s\n", get_external_neighbour_ip(), get_external_neighbour_tcp()); // envia o proprio contacto
                     Write(newfd, message, strlen(message));
+                    send_my_table(newfd);
                     // end of topology process
 
                 }
@@ -291,15 +289,18 @@ void network_interaction(char *ip, char *port)
                     number_of_bytes_read = Read(fd_neighbour, message);
                     if(number_of_bytes_read==0) // TODO change to is_connected()
                     {
-                        withdraw_update_table(fd_neighbour, id_or_name, true);  
+                        withdraw_update_table(fd_neighbour, id_or_name, true);
                         Close(fd_neighbour);
+                        needs_to_connect = reconnect_network(fd_neighbour, bootIP, bootTCP);
+                        if(needs_to_connect)
+                            state = connecting;
                         continue;
                     }
 
                     sscanf(message, "%s %s", command, id_or_name); 
                     if(strcmp(command, "ADVERTISE") == 0)   //  Anúncio do nó com identificador id.
                     {
-                        advertise_update_table(fd_neighbour, id_or_name, &advertise_connecting);
+                        broadcast_advertise(fd_neighbour, id_or_name);
                     }
                     else if(strcmp(command, "WITHDRAW") == 0)   //  Retirada do nó com identificador id.
                     {

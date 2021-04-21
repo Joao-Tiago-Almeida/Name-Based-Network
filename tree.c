@@ -1,6 +1,6 @@
 #include "tree.h"
 
-#define ALLOCATION_OFFSET 2
+#define ALLOCATION_OFFSET 5
 #define CACHE_SIZE 5
 
 // camada da topologia
@@ -8,13 +8,7 @@ struct contact
 {
     char ip[16];
     char tcp[6];
-};
-
-struct cache_node
-{
-    char subname[BUFFER_SIZE];
-    struct cache_node *next;
-    struct cache_node *previous;
+    int socket;
 };
 
 // camada do encaminhamento
@@ -31,6 +25,13 @@ struct resizable_vect
     unsigned int max_size;
 };
 
+struct cache_node
+{
+    char subname[BUFFER_SIZE];
+    struct cache_node *next;
+    struct cache_node *previous;
+};
+
 struct message_path
 {
     int socket;
@@ -40,17 +41,18 @@ struct message_path
 struct node
 {
     // camada da topologia
+    struct contact me;
     struct contact external_neighbour;
     struct contact recovery_contact;
     struct resizable_vect *list_internal_neighbours;
-    unsigned short n_internal;
-
+    struct resizable_vect *direct_neighbours;
     // camda do encaminhamento
     struct resizable_vect *table;
     struct cache_node *head;
     struct cache_node *tail;
     struct resizable_vect *income_messages; 
 };
+
 struct node NODE; // only one node per application
 
 void set_external_and_recovery(char *ip, char *tcp, char *recovery, int socket)
@@ -58,11 +60,15 @@ void set_external_and_recovery(char *ip, char *tcp, char *recovery, int socket)
     // External neighbour
     sprintf(NODE.external_neighbour.ip, "%s", ip);
     sprintf(NODE.external_neighbour.tcp, "%s", tcp);
+    NODE.external_neighbour.socket = socket;
     // recovery contact
     sscanf(recovery, "EXTERN %s %s\n", NODE.recovery_contact.ip, NODE.recovery_contact.tcp);
 
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
     ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = socket;
+
+    NODE.direct_neighbours = add_item_checkup(NODE.direct_neighbours, sizeof(int));
+    ((struct table *)NODE.table->item)[NODE.direct_neighbours->occupancy - 1].socket = socket;
 }
 
 void add_internal_neighbour(char *ip, char *tcp, int socket)
@@ -71,9 +77,13 @@ void add_internal_neighbour(char *ip, char *tcp, int socket)
     NODE.list_internal_neighbours = add_item_checkup(NODE.list_internal_neighbours, sizeof(struct contact));
     sprintf(((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip, "%s", ip);
     sprintf(((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp, "%s", tcp);
+    ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket = socket;
 
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
     ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = socket;
+
+    NODE.direct_neighbours = add_item_checkup(NODE.direct_neighbours, sizeof(int));
+    ((struct table *)NODE.table->item)[NODE.direct_neighbours->occupancy - 1].socket = socket;
 }
 
 // Displays the external and recovery contacts
@@ -116,22 +126,54 @@ void show_table()
 /**
  * 
 */
-void advertise_update_table(int fd, char *id, bool *advertise_connecting)
+void send_my_table(int fd)
+{
+    char message[MESSAGE_SIZE];
+    
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if ((fd != ((struct table *)NODE.table->item)[i].socket) || (strlen(((struct table *)NODE.table->item)[i].id) != 0))
+            continue;
+
+        for (unsigned int j = 0; j < NODE.table->occupancy; j++)
+        {
+            // whether its me or the income socket
+            if (fd == ((struct table *)NODE.table->item)[j].socket) // i == j
+                continue;
+
+            sprintf(message, "ADVERTISE %s\n", ((struct table *)NODE.table->item)[j].id);
+            Write(fd, message, strlen(message));
+        }
+        break;
+    }
+}
+
+/**
+ * 
+*/
+void broadcast_advertise(int fd, char *id)
 {
     char message[MESSAGE_SIZE];
     int *diferent_sockets = checked_calloc(NODE.table->occupancy - 1, sizeof(int)); // worst case
     int number_diferent_sockets = 0;
     bool send_advertise = true;
+    bool direct_neighbour = false;
 
     // iterates over the adjacency table
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
         // whether its me or the income socket
-        if ((((struct table *)NODE.table->item)[i].socket == -1) || (((struct table *)NODE.table->item)[i].socket == fd))
+        if (((struct table *)NODE.table->item)[i].socket == -1)
             continue;
+        else if(((struct table *)NODE.table->item)[i].socket == fd)
+        {
+            direct_neighbour = true;
+            sprintf(((struct table *)NODE.table->item)[i].id, "%s", id);
+            continue;
+        }
 
         send_advertise = true;
-        // iterates over connections who were already sent a message
+        // iterates over connections to see if they were already sent a message
         for (int j = 0; j < number_diferent_sockets; j++)
         {
             if (((struct table *)NODE.table->item)[i].socket == diferent_sockets[j])
@@ -151,30 +193,6 @@ void advertise_update_table(int fd, char *id, bool *advertise_connecting)
     }
     free(diferent_sockets);
 
-    // check if I know the id, and if a new neighbour is found I will send my table
-    bool direct_neighbour = false;
-    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
-    {
-        if ((fd != ((struct table *)NODE.table->item)[i].socket) || (strlen(((struct table *)NODE.table->item)[i].id) != 0))
-            continue;
-        // found new neighbour, gonna send my table
-
-        for (unsigned int j = 0; j < NODE.table->occupancy; j++)
-        {
-            // whether its me or the income socket
-            if (fd == ((struct table *)NODE.table->item)[j].socket || *advertise_connecting) // i == j
-                continue;
-
-            sprintf(message, "ADVERTISE %s\n", ((struct table *)NODE.table->item)[j].id);
-            Write(fd, message, strlen(message));
-        }
-        if (*advertise_connecting)
-            *advertise_connecting = false;
-        direct_neighbour = true;
-        sprintf(((struct table *)NODE.table->item)[i].id, "%s", id);
-        break;
-    }
-
     if (direct_neighbour)
         return;
 
@@ -184,6 +202,9 @@ void advertise_update_table(int fd, char *id, bool *advertise_connecting)
     sprintf(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, "%s", id);
 }
 
+/**
+ * 
+*/
 void withdraw_update_table(int fd, char *id, bool detected_withdraw)
 {
     // get the closed socket
@@ -203,7 +224,8 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
         {
             if (((struct table *)NODE.table->item)[i].socket != fd)
                 continue;
-
+            
+            // stores the id of the nodes that we are removing from our table, to broadcast them next
             sprintf(exit_id[number_exit_id++], "%s", ((struct table *)NODE.table->item)[i].id);
 
             // put the last element in the new free place
@@ -211,10 +233,12 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
             sprintf(((struct table *)NODE.table->item)[i].id, "%s", ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id);
 
             // reset the id of the last position
+            //memset(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, '\0', BUFFER_SIZE);
             sprintf(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, "");
             NODE.table->occupancy--;
             i--;
         }
+        
 
         // send withdraw message to all the remaining sockets
         for (unsigned int i = 0; i < NODE.table->occupancy; i++)
@@ -263,6 +287,7 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
                 sprintf(((struct table *)NODE.table->item)[i].id, "%s", ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id);
 
                 // reset the id of the last position
+                //memset(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, '\0', BUFFER_SIZE);
                 sprintf(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, "");
                 NODE.table->occupancy--;
                 i--;
@@ -294,15 +319,61 @@ void withdraw_update_table(int fd, char *id, bool detected_withdraw)
     free(exit_id);
 }
 
-void node_init(char *id)
+bool reconnect_network(int fd_neighbour, char* bootIP, char* bootTCP)
+{   
+    //  check to see if the node that left was my internal neighbour
+    for(unsigned int i=0; NODE.list_internal_neighbours != NULL && i < NODE.list_internal_neighbours->occupancy; i++)
+    {
+        if(((struct contact*)NODE.list_internal_neighbours->item)[i].socket != fd_neighbour)
+            continue;
+        // put the last element in the new free place
+        ((struct contact*)NODE.list_internal_neighbours->item)[i].socket = ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket;
+        sprintf(((struct contact*)NODE.list_internal_neighbours->item)[i].tcp, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
+        sprintf(((struct contact*)NODE.list_internal_neighbours->item)[i].ip, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
+        NODE.table->occupancy--;
+
+        return false;
+    }
+    //  check to see if the node that left was my external neighbour
+    if(NODE.external_neighbour.socket != fd_neighbour)
+    {
+        printf("Something went wrong, I detected an absence that I can not track");
+        return false;
+    }
+
+    if(strcmp(NODE.me.tcp, NODE.recovery_contact.tcp) == 0 && strcmp(NODE.me.ip, NODE.recovery_contact.ip) == 0)
+    {
+        if(NODE.list_internal_neighbours == NULL || NODE.list_internal_neighbours->occupancy==0)
+        {
+            memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
+           return false;
+        }
+
+        sprintf(NODE.recovery_contact.ip, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
+        sprintf(NODE.recovery_contact.tcp, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
+        NODE.list_internal_neighbours->occupancy --;
+    }
+    
+    memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
+    sprintf(bootIP, "%s", NODE.recovery_contact.ip);
+    sprintf(bootTCP, "%s", NODE.recovery_contact.tcp);
+    
+    return true;
+}
+
+
+void node_init(char *id, char *ip, char *port)
 {
     if (NODE.table != NULL)
         return;
 
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
+    NODE.direct_neighbours = add_item_checkup(NODE.direct_neighbours, sizeof(int));
 
     ((struct table *)NODE.table->item)[0].socket = -1;
     sprintf(((struct table *)NODE.table->item)[0].id, "%s", id);
+    sprintf(NODE.me.ip, "%s", ip);
+    sprintf(NODE.me.tcp, "%s", port);
 
     init_cache();
 }
@@ -389,6 +460,7 @@ void init_cache()
     for (int i = 0; i < CACHE_SIZE; i++)
     {
         struct cache_node *new_node = (struct cache_node *)checked_calloc(1, sizeof(struct cache_node));
+        //memset(new_node->subname, '\0', BUFFER_SIZE);
         sprintf(new_node->subname, "");
         new_node->next = NODE.head;
         new_node->previous = NULL;
