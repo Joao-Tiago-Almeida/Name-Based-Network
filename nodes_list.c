@@ -82,8 +82,6 @@ Types of message and responses
 */
 bool send_udp_message(char *message)
 {
-    Getaddrinfo(NET.regIP, NET.regUDP, &hints, &res);
-
     n_sent = sendto(fd_udp, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
     printf("Sent UDP to %s:%s -> %s\n",NET.regIP, NET.regUDP, message);
 
@@ -128,10 +126,14 @@ void open_UDP()
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;      //IPv4
     hints.ai_socktype = SOCK_DGRAM; //UDP socket
+
+    Getaddrinfo(NET.regIP, NET.regUDP, &hints, &res);
 }
 
 void close_UDP()
 {
-    close(fd_udp);
+    Close(fd_udp);
+    fd_udp = -1;
     freeaddrinfo(res);
+    res = NULL;
 }

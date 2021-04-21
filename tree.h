@@ -10,6 +10,7 @@
 
 void set_external_and_recovery(char *ip, char *tcp, char *recovery, int socket);
 void add_internal_neighbour(char *ip, char *tcp, int socket);
+void update_recovery_contact(char *ip, char *tcp);
 char *get_external_neighbour_ip();
 char *get_external_neighbour_tcp();
 char *get_recovery_contact_ip();
@@ -17,9 +18,9 @@ char *get_recovery_contact_tcp();
 void show_topology();
 void show_table();
 void show_cache();
-void send_my_table(int fd);
-void broadcast_advertise(int fd, char* id);
-void withdraw_update_table(int fd, char *id, bool detected_withdraw);
+void send_my_table(int socket);
+void broadcast_advertise(int socket, char* id);
+void withdraw_update_table(int socket, char *id, bool detected_withdraw);
 bool reconnect_network(int fd_neighbour, char* bootIP, char* bootTC);
 void init_cache();
 void update_cache(char* subname);
@@ -31,5 +32,6 @@ int set_sockets(fd_set* rfds);
 int FD_ISKNOWN(fd_set *rfds);
 struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size);
 void close_node();
+void remove_direct_neighbour(int socket);
 
 #endif

@@ -53,6 +53,7 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
     sscanf(buffer, "%s %s", bootIP, bootTCP);
 
     free(pos_LF_vect);
+    pos_LF_vect = NULL;
 }
 
 void network_interaction(char *ip, char *port)
@@ -90,8 +91,9 @@ void network_interaction(char *ip, char *port)
     addrlen = (socklen_t)sizeof(addr_client);
 
     bool is_connected = false;
+    bool machine_online = true;
 
-    while (1)
+    while (machine_online)
     {
         switch (state)
         {
@@ -106,10 +108,8 @@ void network_interaction(char *ip, char *port)
             sscanf(buffer, "%s", command);
             if (strcmp(command, "exit") == 0)
             {
-                freeaddrinfo(res_server);
-                Close(fd_server);
-                printf("See you later alligator!\n");
-                exit(0);
+                state = disconnecting;
+                break;
             }
             else if (strcmp(command, "join") == 0)
             {
@@ -172,6 +172,22 @@ void network_interaction(char *ip, char *port)
         {
             if (!is_connected)
             {
+                node_init(local_id, ip, port);
+
+                // Starting accepting incoming connections
+                Listen(fd_server);
+
+                // Tell the UDP server I am on!
+                sprintf(message, "REG %s %s %s", net, ip, port);
+                send_udp_message(message);      
+                receive_udp_message(message);
+                if (strcmp(message, "OKREG")) // not register
+                {
+                    printf("Could not register on the UDP list. Try again.\n");
+                    break;
+                }
+                is_connected = true;
+
                 printf("[CONNECTED] You are connected. Available commands:\n");
                 printf("\t>\tcreate subname\n");
                 printf("\t>\tget name\n");
@@ -180,22 +196,6 @@ void network_interaction(char *ip, char *port)
                 printf("\t>\tshow cache    (sc)\n");
                 printf("\t>\tleave\n");
                 printf("\t>\texit\n\n");
-
-                node_init(local_id, ip, port);
-
-                // Starting accepting incoming connections
-                Listen(fd_server);
-
-                // Tell the UDP server I am on!
-                sprintf(message, "REG %s %s %s", net, ip, port);
-                send_udp_message(message);
-                receive_udp_message(message);
-                if (strcmp(message, "OKREG")) // not register
-                {
-                    printf("Could not register on the UDP list. Try again.\n");
-                    break;
-                }
-                is_connected = true;
             }
 
             FD_ZERO(&rfds);
@@ -249,8 +249,7 @@ void network_interaction(char *ip, char *port)
                         send_udp_message(message);
                         receive_udp_message(message);
                         close_node();
-                        Close(fd_server);
-                        exit(0);
+                        state = disconnecting;
                     }
                     else
                     {
@@ -287,11 +286,13 @@ void network_interaction(char *ip, char *port)
                 {
                     FD_CLR(fd_neighbour, &rfds);
                     number_of_bytes_read = Read(fd_neighbour, message);
-                    if(number_of_bytes_read==0) // TODO change to is_connected()
-                    {
-                        withdraw_update_table(fd_neighbour, id_or_name, true);
-                        Close(fd_neighbour);
+                    if(number_of_bytes_read==0) 
+                    {   
+                        remove_direct_neighbour(fd_neighbour);
+                        withdraw_update_table(fd_neighbour, "\0", true);
                         needs_to_connect = reconnect_network(fd_neighbour, bootIP, bootTCP);
+                        Close(fd_neighbour);
+                        fd_neighbour = -1;
                         if(needs_to_connect)
                             state = connecting;
                         continue;
@@ -314,6 +315,11 @@ void network_interaction(char *ip, char *port)
                     {
                         return_search(command, id_or_name);
                     }
+                    else if(strcmp(command, "EXTERN") == 0) // fomos promovidos a vizinhos externos, atualizo o meu vizinho exetrno que se tudo correr so eu próprio
+                    {   
+                        sscanf(message, "%*s %s %s", new_node_ip, new_node_port); 
+                        update_recovery_contact(new_node_ip, new_node_port);
+                    }
                 }
                 else
                 {
@@ -324,6 +330,15 @@ void network_interaction(char *ip, char *port)
         }
         case disconnecting:
         {
+            close_UDP();
+            Close(fd_server);
+            fd_server = -1;
+            Close(fd_client);
+            fd_client = -1;
+            freeaddrinfo(res_server);
+            res_server = NULL;
+            printf("See you later alligator!\n");
+            machine_online = false;
             break;
         }
         }
@@ -344,19 +359,9 @@ int main(int argc, char *argv[])
         exit(1);
     get_info();
 
-    //  send_udp_message("UNREG 35 192.168.1.81 50000");
-    // send_udp_message("UNREG 35 192.168.1.81 50001");
     network_interaction(argv[1], argv[2]);
 
-    // char message[MESSAGE_SIZE+1];
-    // send_udp_message("REG 35 192.168.1.81 50000");
-    // // // receive_udp_message(message);
-    // // // // send_udp_message("UNREG 35 192.168.1.81 50001");
-    // // // // receive_udp_message(message);
-    // // // // // send_udp_message("UNREG 35 192.168.1.75 56790");
-    // // // // // receive_udp_message(message);
-    // send_udp_message("NODES 35");
-    // receive_udp_message(message);
+    exit(0);
 
     return 0;
 }
