@@ -14,7 +14,7 @@ clean:
 	@clear
 	rm $(EXECUTABLE)
 
-EXE := ./ndn 192.168.1.7
+EXE := ./ndn 192.168.1.13
 memory0:
 		clear
 		@leaks -fullContent -atExit -- $(EXE) 50000

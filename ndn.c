@@ -291,10 +291,12 @@ void network_interaction(char *ip, char *port)
                         remove_direct_neighbour(fd_neighbour);
                         withdraw_update_table(fd_neighbour, "\0", true);
                         needs_to_connect = reconnect_network(fd_neighbour, bootIP, bootTCP);
-                        Close(fd_neighbour);
-                        fd_neighbour = -1;
                         if(needs_to_connect)
+                        {
+                            freeaddrinfo(res_client);
+                            res_client = NULL;
                             state = connecting;
+                        }
                         continue;
                     }
 

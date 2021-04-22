@@ -358,6 +358,8 @@ void remove_direct_neighbour(int socket)
         // put the last element in the new free place
         ((int*)NODE.direct_neighbours->item)[i] = ((int*)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy - 1];
         NODE.direct_neighbours->occupancy--;
+        Close(((int*)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy]);
+        ((int*)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy] = -1;
         break;
     }
 }
