@@ -241,7 +241,7 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
             if (((int *)NODE.direct_neighbours->item)[i] == socket)
                 continue;
 
-            // send withdraw messaeges
+            // send withdraw messages
             for (int e = 0; e < number_exit_id; e++)
             {
                 sprintf(message, "WITHDRAW %s\n", exit_id[e]);
@@ -276,7 +276,7 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
 
             // send withdraw messaeges
             sprintf(message, "WITHDRAW %s\n", id);
-            Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
+            Write(((int *)NODE.direct_neighbours->item)[i], message, strlen(message));
         }
     }
 
