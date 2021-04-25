@@ -50,7 +50,7 @@ struct node
     struct resizable_vect *table;
     struct cache_node *head;
     struct cache_node *tail;
-    struct resizable_vect *income_messages; 
+    struct resizable_vect *income_messages;
 };
 
 struct node NODE; // only one node per application
@@ -135,7 +135,7 @@ void show_table()
 void send_my_table(int socket)
 {
     char message[MESSAGE_SIZE];
-    
+
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
         if ((socket != ((struct table *)NODE.table->item)[i].socket) || (strlen(((struct table *)NODE.table->item)[i].id) != 0))
@@ -170,12 +170,12 @@ void broadcast_advertise(int socket, char *id)
             continue;
 
         // verify if is a new neighbour and if so, update its contact
-        else if(((int *)NODE.direct_neighbours->item)[i] == socket)
-        {   
-            for(unsigned int j = 0; j < NODE.table->occupancy; j++)
-            {   
+        else if (((int *)NODE.direct_neighbours->item)[i] == socket)
+        {
+            for (unsigned int j = 0; j < NODE.table->occupancy; j++)
+            {
                 // search for the income sockect
-                if(((struct table *)NODE.table->item)[j].socket != socket || strlen(((struct table *)NODE.table->item)[j].id) != 0)  // socket_i != socket_j or the id is know
+                if (((struct table *)NODE.table->item)[j].socket != socket || strlen(((struct table *)NODE.table->item)[j].id) != 0) // socket_i != socket_j or the id is know
                     continue;
 
                 sprintf(((struct table *)NODE.table->item)[j].id, "%s", id);
@@ -188,8 +188,8 @@ void broadcast_advertise(int socket, char *id)
         sprintf(message, "ADVERTISE %s\n", id);
         Write(((int *)NODE.direct_neighbours->item)[i], message, strlen(message));
     }
-    
-    if(direct_neighbour)
+
+    if (direct_neighbour)
         return;
 
     // add node to my table
@@ -205,8 +205,13 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
 {
     // get the closed socket
     char message[MESSAGE_SIZE];
-    char(*exit_id)[MESSAGE_SIZE];
-    exit_id = checked_calloc(NODE.table->occupancy - 1, sizeof(exit_id)); // worst case
+    unsigned int allocation_size = NODE.table->occupancy - 1;
+    char **exit_id = checked_calloc(NODE.table->occupancy - 1, sizeof(char *)); // worst case
+    for (unsigned int i = 0; i < allocation_size; i++)
+    {
+        exit_id[i] = checked_calloc(MESSAGE_SIZE, sizeof(char));
+    }
+
     int number_exit_id = 0;
 
     if (detected_withdraw)
@@ -216,7 +221,6 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
         {
             if (((struct table *)NODE.table->item)[i].socket != socket)
                 continue;
-
             // stores the id of the nodes that we are removing from our table, to broadcast them next
             sprintf(exit_id[number_exit_id++], "%s", ((struct table *)NODE.table->item)[i].id);
 
@@ -225,14 +229,13 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
             sprintf(((struct table *)NODE.table->item)[i].id, "%s", ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id);
 
             // reset the id of the last position
-            //memset(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, '\0', BUFFER_SIZE);
-            sprintf(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, "");
+            memset(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, '\0', BUFFER_SIZE);
             NODE.table->occupancy--;
             i--;
-        }   
-        
+        }
+
         // send withdraw message to all the remaining sockets
-        for(unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
+        for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
         {
             // withdraw socket
             if (((int *)NODE.direct_neighbours->item)[i] == socket)
@@ -252,21 +255,20 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
         for (unsigned int i = 0; i < NODE.table->occupancy; i++)
         {
             if (strcmp(((struct table *)NODE.table->item)[i].id, id) != 0)
-                continue;   // continues if the id is not to be removed
+                continue; // continues if the id is not to be removed
 
             // put the last element in the new free place
             ((struct table *)NODE.table->item)[i].socket = ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket;
             sprintf(((struct table *)NODE.table->item)[i].id, "%s", ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id);
 
             // reset the id of the last position
-            //memset(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, '\0', BUFFER_SIZE);
-            sprintf(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, "");
+            memset(((struct table *)NODE.table->item)[NODE.table->occupancy - 1].id, '\0', BUFFER_SIZE);
             NODE.table->occupancy--;
             break;
         }
 
         // send withdraw message to all the remaining sockets
-        for(unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
+        for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
         {
             // withdraw socket
             if (((int *)NODE.direct_neighbours->item)[i] == socket)
@@ -277,58 +279,71 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
             Write(((struct table *)NODE.table->item)[i].socket, message, strlen(message));
         }
     }
+
+    for (unsigned int i = 0; i < allocation_size; i++)
+    {
+        free(exit_id[i]);
+    }
     free(exit_id);
     exit_id = NULL;
 }
 
-bool reconnect_network(int fd_neighbour, char* bootIP, char* bootTCP)
-{   
+bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
+{
     //  see if the node that left was my internal neighbour
-    for(unsigned int i = 0; NODE.list_internal_neighbours != NULL && i < NODE.list_internal_neighbours->occupancy; i++)
+    if (NODE.list_internal_neighbours != NULL)
     {
-        if(((struct contact*)NODE.list_internal_neighbours->item)[i].socket != fd_neighbour)
-            continue;
-            
-        // put the last element in the new free place
-        ((struct contact*)NODE.list_internal_neighbours->item)[i].socket = ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket;
-        sprintf(((struct contact*)NODE.list_internal_neighbours->item)[i].tcp, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
-        sprintf(((struct contact*)NODE.list_internal_neighbours->item)[i].ip, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
-        NODE.table->occupancy--;
+        for (unsigned int i = 0; i < NODE.list_internal_neighbours->occupancy; i++)
+        {
+            if (((struct contact *)NODE.list_internal_neighbours->item)[i].socket != fd_neighbour)
+                continue;
 
-        return false;
+            // put the last element in the new free place
+            ((struct contact *)NODE.list_internal_neighbours->item)[i].socket = ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket;
+            sprintf(((struct contact *)NODE.list_internal_neighbours->item)[i].tcp, "%s", ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
+            sprintf(((struct contact *)NODE.list_internal_neighbours->item)[i].ip, "%s", ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
+            NODE.list_internal_neighbours->occupancy--;
+
+            return false;
+        }
     }
     //  see if the node that left was my external neighbour
-    if(NODE.external_neighbour.socket != fd_neighbour)
+    if (NODE.external_neighbour.socket != fd_neighbour)
     {
-        printf("Something went wrong, I detected an absence that I can not track. My external's socket is %d and the old node %d\n", NODE.external_neighbour.socket ,fd_neighbour);
+        printf("Something went wrong, I detected an absence that I can not track. My external's socket is %d and the old node %d\n", NODE.external_neighbour.socket, fd_neighbour);
         return false;
     }
 
-    if(strcmp(NODE.me.tcp, NODE.recovery_contact.tcp) == 0 && strcmp(NODE.me.ip, NODE.recovery_contact.ip) == 0)    // if I am my recovery contact
+    if (strcmp(NODE.me.tcp, NODE.recovery_contact.tcp) == 0 && strcmp(NODE.me.ip, NODE.recovery_contact.ip) == 0) // if I am my recovery contact
     {
-        if(NODE.list_internal_neighbours == NULL || NODE.list_internal_neighbours->occupancy==0)
+        if (NODE.list_internal_neighbours == NULL)
+        {
+            memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
+            return false;
+        }
+        else if (NODE.list_internal_neighbours->occupancy == 0)
         {
             memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
             return false;
         }
         // promote an internal neighbour to external
-        sprintf(NODE.external_neighbour.ip, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
-        sprintf(NODE.external_neighbour.tcp, "%s", ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
-        NODE.external_neighbour.socket = ((struct contact*)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket;
+        sprintf(NODE.external_neighbour.ip, "%s", ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
+        sprintf(NODE.external_neighbour.tcp, "%s", ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
+        NODE.external_neighbour.socket = ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket;
         // updates the recovery neighour of the promoted node
         char message[MESSAGE_SIZE];
         sprintf(message, "EXTERN %s %s\n", NODE.external_neighbour.ip, NODE.external_neighbour.tcp); // envia o proprio contacto
         Write(NODE.external_neighbour.socket, message, strlen(message));
-        NODE.list_internal_neighbours->occupancy --;
+        NODE.list_internal_neighbours->occupancy--;
         return false;
     }
+
     memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
     sprintf(bootIP, "%s", NODE.recovery_contact.ip);
     sprintf(bootTCP, "%s", NODE.recovery_contact.tcp);
-    
+
     return true;
 }
-
 
 void node_init(char *id, char *ip, char *port)
 {
@@ -350,16 +365,17 @@ void node_init(char *id, char *ip, char *port)
 */
 void remove_direct_neighbour(int socket)
 {
-    for(unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
+    for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
     {
-        if(((int*)NODE.direct_neighbours->item)[i] != socket)
+        if (((int *)NODE.direct_neighbours->item)[i] != socket)
             continue;
 
         // put the last element in the new free place
-        ((int*)NODE.direct_neighbours->item)[i] = ((int*)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy - 1];
+        Close(((int *)NODE.direct_neighbours->item)[i]);
+        ((int *)NODE.direct_neighbours->item)[i] = ((int *)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy - 1];
+        ((int *)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy - 1] = -1;
         NODE.direct_neighbours->occupancy--;
-        Close(((int*)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy]);
-        ((int*)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy] = -1;
+
         break;
     }
 }
@@ -381,12 +397,6 @@ char *get_recovery_contact_tcp()
     return NODE.external_neighbour.tcp;
 }
 
-/** get the different chanels around the node
-FD_SET()
-              This macro adds the file descriptor fd to set.  Adding a
-              file descriptor that is already present in the set is a
-              no-op, and does not produce an error.
- */
 int set_sockets(fd_set *rfds)
 {
     if (NODE.table == NULL) // does not have a table...
@@ -446,8 +456,8 @@ void init_cache()
     for (int i = 0; i < CACHE_SIZE; i++)
     {
         struct cache_node *new_node = (struct cache_node *)checked_calloc(1, sizeof(struct cache_node));
-        //memset(new_node->subname, '\0', BUFFER_SIZE);
-        sprintf(new_node->subname, "");
+        memset(new_node->subname, '\0', BUFFER_SIZE);
+        //sprintf(new_node->subname, "");
         new_node->next = NODE.head;
         new_node->previous = NULL;
         if (NODE.head != NULL)
@@ -460,52 +470,53 @@ void init_cache()
 }
 
 void search_object(char *name, int socket, bool waiting_for_object)
-{   
+{
     char id[BUFFER_SIZE];
     char subname[BUFFER_SIZE];
     char message[MESSAGE_SIZE];
     bool id_in_my_table = false;
 
     bool valid_name = break_name_into_id_and_subname(name, id, subname);
-    if(!valid_name)
+    if (!valid_name)
     {
         printf("The name '%s' you entered is not valid, try again soldier.\n", name);
         return;
     }
 
     // validate the id
-    for(unsigned int i=0; i<NODE.table->occupancy; i++){
-        if(strcmp(((struct table *)NODE.table->item)[i].id,id)!=0)
+    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    {
+        if (strcmp(((struct table *)NODE.table->item)[i].id, id) != 0)
             continue;
 
         id_in_my_table = true;
         break;
     }
-    if(!id_in_my_table)
+    if (!id_in_my_table)
     {
         printf("The id: '%s' is not in my bucket list...\n", id);
         return;
     }
 
     // search in my own cache
-    struct cache_node * ptr = search_my_cache(subname);
-    if(ptr != NULL) // found it
+    struct cache_node *ptr = search_my_cache(subname);
+    if (ptr != NULL) // found it
     {
-        if(waiting_for_object)
+        if (waiting_for_object)
         {
             sprintf(message, "DATA %s.%s\n", id, subname);
             Write(socket, message, strlen(message));
         }
         else
         {
-            printf("I already have have the object titled: '%s'.\n", subname);
+            printf("I already have the object titled: '%s'.\n", subname);
         }
         update_cache(subname);
-        return; 
+        return;
     }
 
     // I am the one to whom the message was intended, if I did not find the object the search will end unsuccessfully
-    if(strcmp(id, ((struct table *)NODE.table->item)[0].id)==0)
+    if (strcmp(id, ((struct table *)NODE.table->item)[0].id) == 0)
     {
         sprintf(message, "NODATA %s.%s\n", id, subname);
         Write(socket, message, strlen(message));
@@ -513,8 +524,8 @@ void search_object(char *name, int socket, bool waiting_for_object)
     }
 
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
-    {   
-        if(strcmp(((struct table *)NODE.table->item)[i].id, id) != 0)
+    {
+        if (strcmp(((struct table *)NODE.table->item)[i].id, id) != 0)
             continue;
 
         sprintf(message, "INTEREST %s.%s\n", id, subname);
@@ -522,26 +533,25 @@ void search_object(char *name, int socket, bool waiting_for_object)
 
         NODE.income_messages = add_item_checkup(NODE.income_messages, sizeof(struct message_path));
         ((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].socket = socket;
-        sprintf(((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].name, "%s", name);   
+        sprintf(((struct message_path *)NODE.income_messages->item)[NODE.income_messages->occupancy - 1].name, "%s", name);
     }
-        
 }
 
 void return_search(char *command, char *name)
-{   
+{
     char id[BUFFER_SIZE];
     char subname[BUFFER_SIZE];
     char message[MESSAGE_SIZE];
 
     bool valid_name = break_name_into_id_and_subname(name, id, subname);
-    if(!valid_name)
+    if (!valid_name)
     {
         printf("The name '%s' you entered is not valid, try again soldier.\n", name);
         return;
     }
 
     // save the object if it receives a DATA message
-    if(strcmp(command, "DATA")==0)
+    if (strcmp(command, "DATA") == 0)
     {
         update_cache(subname);
     }
@@ -551,23 +561,23 @@ void return_search(char *command, char *name)
     // search for the loop back path according to the message
     for (unsigned int i = 0; i < NODE.income_messages->occupancy; i++)
     {
-        if(strcmp(name, ((struct message_path *)NODE.income_messages->item)[i].name))
+        if (strcmp(name, ((struct message_path *)NODE.income_messages->item)[i].name))
             continue;
-        
+
         NODE.income_messages->occupancy--;
         socket = ((struct message_path *)NODE.income_messages->item)[i].socket;
         break;
     }
 
-    if(socket==-1)
+    if (socket == -1)
     {
         printf("I do not have any transcript of the message: '%s'.\n", name);
         return;
     }
 
-    if(socket == STDOUT_FILENO)
+    if (socket == STDOUT_FILENO)
     {
-        if(strcmp(command, "DATA")==0)
+        if (strcmp(command, "DATA") == 0)
             printf("Gottcha, your Pokemon: '%s' is ready now!\n", subname);
         else
             printf("Even though I had a tough time searching for the needle in the haystack, it is still missing :'(\n");
@@ -577,46 +587,45 @@ void return_search(char *command, char *name)
         sprintf(message, "%s %s.%s\n", command, id, subname);
         Write(socket, message, strlen(message));
     }
-
 }
 
 void show_cache()
 {
-    struct cache_node* ptr=NODE.head;
+    struct cache_node *ptr = NODE.head;
     int count = 0;
 
     printf("Cache\n");
-    while(ptr!=NULL)
-    {   
-        if(strlen(ptr->subname)!=0)
+    while (ptr != NULL)
+    {
+        if (strlen(ptr->subname) != 0)
             printf("%d. %s\n", ++count, ptr->subname);
 
-        ptr=ptr->next;
+        ptr = ptr->next;
     }
     printf("OCCUPANCY: %d\t CACHE_SIZE: %d\n", count, CACHE_SIZE);
 }
 
 // LSR
 void update_cache(char *subname)
-{       
+{
     struct cache_node *ptr = search_my_cache(subname);
-    if(ptr==NULL)   // object does not exist in my cache
+    if (ptr == NULL) // object does not exist in my cache
     {
         sprintf(NODE.tail->subname, "%s", subname);
         // criar ligações
         NODE.tail->next = NODE.head;
-        NODE.head->previous=NODE.tail;
+        NODE.head->previous = NODE.tail;
         // atualizar ponteiros
         NODE.tail = NODE.tail->previous;
-        NODE.head=NODE.head->previous;
+        NODE.head = NODE.head->previous;
         // quebrar ligações
-        NODE.tail->next=NULL;
-        NODE.head->previous=NULL;
+        NODE.tail->next = NULL;
+        NODE.head->previous = NULL;
     }
-    else    
-    {   
+    else
+    {
         // Remove from the middle
-        if(ptr->previous==NULL) // it already is the recently
+        if (ptr->previous == NULL) // it already is the recently
             return;
 
         ptr->previous->next = ptr->next;
@@ -632,27 +641,27 @@ void update_cache(char *subname)
 
 struct cache_node *search_my_cache(char *subname)
 {
-    struct cache_node* ptr=NODE.head;
+    struct cache_node *ptr = NODE.head;
 
-    while(ptr!=NULL)
-    {   
-        if(strcmp(subname, ptr->subname)==0)    // found subname
+    while (ptr != NULL)
+    {
+        if (strcmp(subname, ptr->subname) == 0) // found subname
             return ptr;
-        ptr=ptr->next;
+        ptr = ptr->next;
     }
     return NULL;
 }
 
 void close_node()
-{   
-    if( NODE.direct_neighbours != NULL )
+{
+    if (NODE.direct_neighbours != NULL)
     {
-        if( NODE.direct_neighbours->item != NULL)
+        if (NODE.direct_neighbours->item != NULL)
         {
-            for (unsigned int i = 0;i < NODE.direct_neighbours->occupancy; i++)
+            for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
             {
-                Close(((int*)NODE.direct_neighbours->item)[i]);
-                ((int*)NODE.direct_neighbours->item)[i] = -1;
+                Close(((int *)NODE.direct_neighbours->item)[i]);
+                ((int *)NODE.direct_neighbours->item)[i] = -1;
             }
             free(NODE.direct_neighbours->item);
             NODE.direct_neighbours->item = NULL;
@@ -661,9 +670,9 @@ void close_node()
         NODE.direct_neighbours = NULL;
     }
 
-    if( NODE.table != NULL)
+    if (NODE.table != NULL)
     {
-        if( NODE.table->item != NULL)
+        if (NODE.table->item != NULL)
         {
             free(NODE.table->item);
             NODE.table->item = NULL;
@@ -672,35 +681,35 @@ void close_node()
         NODE.table = NULL;
     }
 
-    if( NODE.list_internal_neighbours != NULL )
+    if (NODE.list_internal_neighbours != NULL)
     {
-        if(NODE.list_internal_neighbours->item != NULL)
+        if (NODE.list_internal_neighbours->item != NULL)
         {
             free(NODE.list_internal_neighbours->item);
             NODE.list_internal_neighbours->item = NULL;
         }
-        free(NODE.list_internal_neighbours->item);
-        NODE.list_internal_neighbours->item = NULL;
+        free(NODE.list_internal_neighbours);
+        NODE.list_internal_neighbours = NULL;
     }
 
-    if( NODE.income_messages != NULL )
+    if (NODE.income_messages != NULL)
     {
-        if(NODE.income_messages->item != NULL)
+        if (NODE.income_messages->item != NULL)
         {
             free(NODE.income_messages->item);
             NODE.income_messages->item = NULL;
         }
-        free(NODE.income_messages->item);
-        NODE.income_messages->item = NULL;
+        free(NODE.income_messages);
+        NODE.income_messages = NULL;
     }
 
     // free cache
-   struct cache_node* tmp;
-   while (NODE.head != NULL)
+    struct cache_node *tmp;
+    while (NODE.head != NULL)
     {
-       tmp = NODE.head;
-       NODE.head = NODE.head->next;
-       free(tmp);
-       tmp = NULL;
+        tmp = NODE.head;
+        NODE.head = NODE.head->next;
+        free(tmp);
+        tmp = NULL;
     }
 }

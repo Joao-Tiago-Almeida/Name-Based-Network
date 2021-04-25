@@ -15,7 +15,7 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
     int neighbour = 1; // init for the situation when there is only one neighbour
 
     int count = 0;
-    char buffer[BUFFER_SIZE];
+    char buffer[MESSAGE_SIZE];
 
     // get the position of the '\n'
     for (int i = 0; message[i] != '\0'; ++i)
@@ -46,9 +46,10 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
     }
 
     memset(buffer, '\0', BUFFER_SIZE);
+    int j = 0;
     for (int i = pos_LF_vect[neighbour - 1]; i < pos_LF_vect[neighbour]; i++)
     {
-        sprintf(buffer, "%s%c", buffer, message[i]);
+        buffer[j++] = message[i];
     }
     sscanf(buffer, "%s %s", bootIP, bootTCP);
 
@@ -151,6 +152,8 @@ void network_interaction(char *ip, char *port)
             fd_client = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
             Getaddrinfo(bootIP, bootTCP, &hints, &res_client);
             Connect(fd_client, res_client->ai_addr, res_client->ai_addrlen);
+            freeaddrinfo(res_client);
+            res_client = NULL;
             sprintf(message, "NEW %s %s\n", ip, port);
             Write(fd_client, message, strlen(message)); // NEW IP TCP<LF>
             FD_ZERO(&rfds);
@@ -210,6 +213,7 @@ void network_interaction(char *ip, char *port)
                 {
                     FD_CLR(STDIN_FILENO, &rfds);
                     memset(buffer, '\0', MESSAGE_SIZE);
+                    memset(message, '\0', MESSAGE_SIZE);
                     fgets(buffer, BUFFER_SIZE, stdin);
                     buffer[strlen(buffer)-1] = '\0';    // replace \n
                     if (strncmp(buffer, "create subname", 7) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
@@ -250,6 +254,7 @@ void network_interaction(char *ip, char *port)
                         receive_udp_message(message);
                         close_node();
                         state = disconnecting;
+            
                     }
                     else
                     {
@@ -288,13 +293,11 @@ void network_interaction(char *ip, char *port)
                     number_of_bytes_read = Read(fd_neighbour, message);
                     if(number_of_bytes_read==0) 
                     {   
-                        remove_direct_neighbour(fd_neighbour);
                         withdraw_update_table(fd_neighbour, "\0", true);
+                        remove_direct_neighbour(fd_neighbour);
                         needs_to_connect = reconnect_network(fd_neighbour, bootIP, bootTCP);
                         if(needs_to_connect)
                         {
-                            freeaddrinfo(res_client);
-                            res_client = NULL;
                             state = connecting;
                         }
                         continue;
@@ -335,8 +338,6 @@ void network_interaction(char *ip, char *port)
             close_UDP();
             Close(fd_server);
             fd_server = -1;
-            Close(fd_client);
-            fd_client = -1;
             freeaddrinfo(res_server);
             res_server = NULL;
             printf("See you later alligator!\n");

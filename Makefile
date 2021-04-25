@@ -1,7 +1,7 @@
 #compiler used
 CC = gcc
 
-CFLAGS = -Wall -Wextra -Werror -Wshadow -Wformat=2 -g
+CFLAGS = -Wall -Wextra -Wshadow -Wformat=2 -g
 
 #executable name
 EXECUTABLE = ndn
@@ -14,44 +14,85 @@ clean:
 	@clear
 	rm $(EXECUTABLE)
 
-EXE := ./ndn 192.168.1.13
+EXE_MAC := ./ndn 192.168.1.13
 memory0:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50000
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50000
 
 memory1:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50001
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50001
 
 memory2:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50002
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50002
 
 memory3:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50003
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50003
 
 memory4:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50004
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50004
 
 memory5:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50005
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50005
 
 memory6:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50006
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50006
 
 memory7:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50007
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50007
 
 memory8:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50008
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50008
 
 memory9:
 		clear
-		@leaks -fullContent -atExit -- $(EXE) 50009
+		@leaks -fullContent -atExit -- $(EXE_MAC) 50009
 
+EXE_WINDOWS := ./ndn 10.0.2.15
+
+valgrind0:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind0-out.txt $(EXE_WINDOWS) 50000
+
+valgrind1:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind1-out.txt $(EXE_WINDOWS) 50001 
+
+valgrind2:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind2-out.txt $(EXE_WINDOWS) 50002
+
+valgrind3:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind3-out.txt $(EXE_WINDOWS) 50003 
+
+valgrind4:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind4-out.txt $(EXE_WINDOWS) 50004 
+
+valgrind5:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind5-out.txt $(EXE_WINDOWS) 50005 
+
+valgrind6:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind6-out.txt $(EXE_WINDOWS) 50006
+
+valgrind7:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind7-out.txt $(EXE_WINDOWS) 50007
+
+valgrind8:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind8-out.txt $(EXE_WINDOWS) 50008
+
+valgrind9:
+		clear
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind9-out.txt $(EXE_WINDOWS) 50009
