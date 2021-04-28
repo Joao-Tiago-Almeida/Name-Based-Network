@@ -1,9 +1,9 @@
 #include "tree.h"
 
-#define ALLOCATION_OFFSET 2
-#define CACHE_SIZE 5
+#define ALLOCATION_OFFSET 3
+#define CACHE_SIZE 2
 
-// camada da topologia
+// topology - contact struct
 struct contact
 {
     char ip[16];
@@ -11,13 +11,14 @@ struct contact
     int socket;
 };
 
-// camada do encaminhamento
+// routing - routing table entry struct
 struct table
 {
     int socket;
     char id[BUFFER_SIZE];
 };
 
+// allocation auxiliar struct
 struct resizable_vect
 {
     void *item;
@@ -25,6 +26,7 @@ struct resizable_vect
     unsigned int max_size;
 };
 
+// cache information
 struct cache_node
 {
     char subname[BUFFER_SIZE];
@@ -32,67 +34,97 @@ struct cache_node
     struct cache_node *previous;
 };
 
+// forwarding auxiliar struct
 struct message_path
 {
     int socket;
     char name[BUFFER_SIZE];
 };
 
+// all node information
 struct node
 {
-    // camada da topologia
+    // topology
     struct contact me;
     struct contact external_neighbour;
     struct contact recovery_contact;
     struct resizable_vect *list_internal_neighbours;
     struct resizable_vect *direct_neighbours;
-    // camda do encaminhamento
+    // routing
     struct resizable_vect *table;
     struct cache_node *head;
     struct cache_node *tail;
     struct resizable_vect *income_messages;
 };
 
-struct node NODE; // only one node per application
+// only one node declared per application
+struct node NODE; 
 
+/**
+ * Adds a new connection as am external neighbour.
+ * Sets all external neighbour and recovery contact information in the node struct.
+ * @param   ip          IPv4 of ones node
+ * @param   tcp         TCP port of ones node
+ * @param   recovery    Information about my recovery contact
+ * @param   socket      End point of the connection
+*/
 void set_external_and_recovery(char *ip, char *tcp, char *recovery, int socket)
 {
-    // External neighbour
+    // set external neighbour information
     sprintf(NODE.external_neighbour.ip, "%s", ip);
     sprintf(NODE.external_neighbour.tcp, "%s", tcp);
     NODE.external_neighbour.socket = socket;
-    // recovery contact
+    
+    // set recovery neighbour information
     sscanf(recovery, "EXTERN %s %s\n", NODE.recovery_contact.ip, NODE.recovery_contact.tcp);
 
+    // insert external neighbour into the routing table, no knowledge of id yet
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
     ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = socket;
-
+    
+    // insert external neighbour into the list of direct neighbours
     NODE.direct_neighbours = add_item_checkup(NODE.direct_neighbours, sizeof(int));
     ((int *)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy - 1] = socket;
 }
 
+/**
+ * Adds a new connection as an internal neighbour.
+ * Sets all internal neighbour information in the node struct.
+ * @param   ip          IPv4 of ones node
+ * @param   tcp         TCP port of ones node
+ * @param   socket      End point of the connection
+*/
 void add_internal_neighbour(char *ip, char *tcp, int socket)
 {
-
+    // insert internal neighbour into the list of internal neighbours
     NODE.list_internal_neighbours = add_item_checkup(NODE.list_internal_neighbours, sizeof(struct contact));
     sprintf(((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip, "%s", ip);
     sprintf(((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp, "%s", tcp);
     ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket = socket;
 
+    // insert internal neighbour into the routing table, no knowledge of id yet
     NODE.table = add_item_checkup(NODE.table, sizeof(struct table));
     ((struct table *)NODE.table->item)[NODE.table->occupancy - 1].socket = socket;
 
+    // insert internal neighbour in the list of direct neighbours
     NODE.direct_neighbours = add_item_checkup(NODE.direct_neighbours, sizeof(int));
     ((int *)NODE.direct_neighbours->item)[NODE.direct_neighbours->occupancy - 1] = socket;
 }
 
+/**
+ * Updates recovery contact information.
+ * @param   ip      IPv4 of the recovery contact
+ * @param   tcp     TCP port of othe recovery contact
+*/
 void update_recovery_contact(char *ip, char *tcp)
 {
     sprintf(NODE.recovery_contact.ip, "%s", ip);
     sprintf(NODE.recovery_contact.tcp, "%s", tcp);
 }
 
-// Displays the external and recovery contacts
+/**
+ * Prints the external and recovery contacts on the terminal.
+*/
 void show_topology()
 {
     printf("[TOPOLOGY] Here are your contacts:\n");
@@ -106,6 +138,9 @@ void show_topology()
     printf("\t*\tExternal Neighbour:\t%s:%s\n\n", NODE.external_neighbour.ip, NODE.external_neighbour.tcp);
 }
 
+/**
+ * Prints the adjacency table on the terminal
+*/
 void show_table()
 {
     char socket_[BUFFER_SIZE]; // auxiliar struct to remove -1 and replace to -
@@ -130,7 +165,8 @@ void show_table()
 }
 
 /**
- * 
+ * Send advertise of every element in my table, most likely when a new conncetion occurs
+ * @param   socket      Socket to where the node will send the entirely table
 */
 void send_my_table(int socket)
 {
@@ -140,13 +176,13 @@ void send_my_table(int socket)
     {
         if ((socket != ((struct table *)NODE.table->item)[i].socket) || (strlen(((struct table *)NODE.table->item)[i].id) != 0))
             continue;
-
         for (unsigned int j = 0; j < NODE.table->occupancy; j++)
         {
-            // income socket
-            if (((struct table *)NODE.table->item)[j].socket == socket) // i == j
+            // incoming socket
+            if (((struct table *)NODE.table->item)[j].socket == socket)
                 continue;
-            else if(strlen(((struct table *)NODE.table->item)[j].id) == 0) // node not known yet
+            // node not identified yet
+            else if(strlen(((struct table *)NODE.table->item)[j].id) == 0)
                 continue;
             sprintf(message, "ADVERTISE %s\n", ((struct table *)NODE.table->item)[j].id);
             Write(socket, message, strlen(message));
@@ -156,7 +192,9 @@ void send_my_table(int socket)
 }
 
 /**
- * 
+ * Shares the information about a new know with the neighbour nodes
+ * @param  socket   Socket from where the avertise came from
+ * @param  id       Id of the new node in the network
 */
 void broadcast_advertise(int socket, char *id)
 {
@@ -200,11 +238,14 @@ void broadcast_advertise(int socket, char *id)
 }
 
 /**
+ * Removes all table entries with the same socket as the leaving node and broadcasts WITHDRAW.
+ * @param   socket              Direct end point that was closed
+ * @param   id                  Identifier of leaving nodes
+ * @param   detected_withdraw   Identifies where it was the one that noticed a closed connection or it was received a WITHDRAW message
  * 
 */
 void withdraw_update_table(int socket, char *id, bool detected_withdraw)
 {
-    // get the closed socket
     char message[MESSAGE_SIZE];
     unsigned int allocation_size = NODE.table->occupancy - 1;
     char **exit_id = checked_calloc(NODE.table->occupancy - 1, sizeof(char *)); // worst case
@@ -289,6 +330,12 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
     exit_id = NULL;
 }
 
+/**
+ * Reconnects the network when a node leaves and separates it in two sub-networks, using the recovery contact
+ * @param   fd_neighbour    End point that was closed
+ * @param   bootIP          Store the IPv4 that the one will connect if needed          @return
+ * @param   bootTCP         Store the TCP port that the one will connect if needed      @return
+*/
 bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
 {
     char message[MESSAGE_SIZE];
@@ -343,7 +390,7 @@ bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
     memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
     sprintf(bootIP, "%s", NODE.recovery_contact.ip);
     sprintf(bootTCP, "%s", NODE.recovery_contact.tcp);
-    //dizer aos vizinhos internos que vou mudar de externo
+    // alert internal neighbours of my new external neighbour and, therefore, their new recovery contact
     if (NODE.list_internal_neighbours != NULL)
     {
         for (unsigned int i = 0; i < NODE.list_internal_neighbours->occupancy; i++)
@@ -357,6 +404,9 @@ bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
     return true;
 }
 
+/**
+ * Initializes node struct
+*/
 void node_init(char *id, char *ip, char *port)
 {
     if (NODE.table != NULL)
@@ -372,8 +422,8 @@ void node_init(char *id, char *ip, char *port)
     init_cache();
 }
 
-/*
-*   Removes a speacific socket from the nearby sockets if it detecs that a connection is closed
+/**
+ * Removes a specific socket from the direct neighbours array if it detects that a connection is closed
 */
 void remove_direct_neighbour(int socket)
 {
@@ -409,24 +459,31 @@ char *get_recovery_contact_tcp()
     return NODE.external_neighbour.tcp;
 }
 
+/**
+ * Sets the sockets in the adjancency table for Select()
+ * @param   rfds    range of file descriptors to be tested
+ * @return          number maximum of sockets
+*/
 int set_sockets(fd_set *rfds)
 {
-    if (NODE.table == NULL) // does not have a table...
+    if (NODE.direct_neighbours == NULL) // does not have a table
         return -1;
 
     int maxfd = 0;
-    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
     {
-        if (((struct table *)NODE.table->item)[i].socket == -1) // personal connection in the adjancency table
-            continue;
+        // if (((struct table *)NODE.table->item)[i].socket == -1) // personal connection in the adjancency table
+        //     continue;
 
-        FD_SET(((struct table *)NODE.table->item)[i].socket, rfds);
-        maxfd = max(maxfd, ((struct table *)NODE.table->item)[i].socket);
+        FD_SET(((int *)NODE.direct_neighbours->item)[i], rfds);
+        maxfd = max(maxfd, ((int *)NODE.direct_neighbours->item)[i]);
     }
     return maxfd;
 }
 
-// ensures that the vector has space
+/**
+ * Allocates and intializes resizable_vect
+*/
 struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size)
 {
     if (ptr == NULL)
@@ -448,17 +505,24 @@ struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size
     return ptr;
 }
 
-// Iterates through the hash table and returns the set socket if a known connection was set, and -1 otherwise
+/**
+ * Iterates over the adjacency table and returns the set socket if a known connection was set, and -1 otherwise
+ * @param   rfds    range of file descriptors to be tested
+ * @return          active socket
+*/
 int FD_ISKNOWN(fd_set *rfds)
 {
-    for (unsigned int i = 0; i < NODE.table->occupancy; i++)
+    for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
     {
-        if (FD_ISSET(((struct table *)NODE.table->item)[i].socket, rfds) != 0)
-            return ((struct table *)NODE.table->item)[i].socket;
+        if (FD_ISSET(((int *)NODE.direct_neighbours->item)[i], rfds) != 0)
+            return ((int *)NODE.direct_neighbours->item)[i];
     }
     return -1;
 }
 
+/**
+ *  Initializes the cache list
+*/
 void init_cache()
 {
     //head vai ser o mais recentemente utilizado
@@ -470,7 +534,6 @@ void init_cache()
     {
         struct cache_node *new_node = (struct cache_node *)checked_calloc(1, sizeof(struct cache_node));
         memset(new_node->subname, '\0', BUFFER_SIZE);
-        //sprintf(new_node->subname, "");
         new_node->next = NODE.head;
         new_node->previous = NULL;
         if (NODE.head != NULL)
@@ -482,6 +545,9 @@ void init_cache()
     }
 }
 
+/**
+ *  
+*/
 void search_object(char *name, int socket, bool waiting_for_object)
 {
     char id[BUFFER_SIZE];
@@ -507,7 +573,7 @@ void search_object(char *name, int socket, bool waiting_for_object)
     }
     if (!id_in_my_table)
     {
-        printf("The id: '%s' is not in my bucket list...\n", id);
+        printf("The id: '%s' is not in my group chat...\n", id);
         return;
     }
 

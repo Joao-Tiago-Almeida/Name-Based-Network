@@ -9,13 +9,13 @@
 #define MESSAGE_SIZE 1023
 #define BUFFER_SIZE 255
 
+#define DEBUG 0 // wheter it prints auxiliar messages in the terminal
 
-bool check_IP(char *IP);
-bool check_port(char *port);
-bool check_net(char *net);
-int get_number_of_LF(char *string);
+bool break_name_into_id_and_subname(char *str, char *id, char* subname);
 void *checked_calloc(size_t nitems, size_t size);
 void *checked_realloc(void *ptr, size_t size);
-bool break_name_into_id_and_subname(char *str, char *id, char* subname);
+bool check_IP(char *IPv4);
+bool check_port(char *port);
+int get_number_of_LF(char *string);
 
 #endif

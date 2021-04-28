@@ -12,7 +12,7 @@ $(EXECUTABLE):
 
 clean:
 	@clear
-	rm $(EXECUTABLE)
+	rm $(EXECUTABLE) *.txt
 
 EXE_MAC := ./ndn 192.168.1.14
 memory0:

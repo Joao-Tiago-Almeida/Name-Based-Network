@@ -1,15 +1,35 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
+#include<signal.h>
 
 #include "nodes_list.h"
 #include "tree.h"
 
+/**
+ * Prints the correct syntex of how to run the executable properly.
+*/
 void print_usage(char *program_name)
 {
-    printf("Usage: %s IP TCP regIP regUDP\n", program_name);
+    printf("Usage: %s IP TCP (regIP) (regUDP)\n", program_name);
 }
 
-void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neighbour)
+/**
+ * Blocks the system functions to be called, e.g. cmd/control + c.
+*/
+void handle_sigint(){/* do nothing */}
+
+/**
+ * Selects the node where the ones is going to try to connect.
+ * @param   message         Response of the nodes list server for the command NODES <net>.
+ * This message has the form NODESLIST <net> \n <IPv4_available_node_1>  <IPv4_available_node_1> \n ... <IPv4_available_node_N>  <IPv4_available_node_N> \n
+ * @param   bootIP          IPv4 port of the node that the incoming node is going to connect to   @return
+ * @param   bootTCP         TCP port of the node that the incoming node is going to connect to    @return    
+ * @param   n_neighbour     Number of available nodes in the network plus the header information. In real the number of available nodes in the network is n_neighbour-1
+ * @param   random_choice   When random_choice is true, the program choose a random neighour, otherwise it allows the user to choose a neighour from the network
+ * Disable this flag will allow a better user experience when building a network in the same net. 
+*/
+void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neighbour, bool random_choice)
 {
     int *pos_LF_vect = (int *)checked_calloc(n_neighbour, sizeof(int));
     int neighbour = 1; // init for the situation when there is only one neighbour
@@ -25,26 +45,38 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
     }
 
     if (n_neighbour > 2) // in case there is more than one neighbour
-    {
-        printf("\nInsert the number of the neighboor that you want to connect to.\n");
-
-        // print option list
-        for (int i = 1; i < n_neighbour; ++i)
-        {
-            printf("%d. ", i);
-            for (int j = pos_LF_vect[i - 1] + 1; j <= pos_LF_vect[i]; j++)
-                printf("%c", message[j]);
+    {   
+        // Randomly chososes one node in the list
+        if( random_choice )
+        {  
+            neighbour = 1 + rand()%(n_neighbour-1);
         }
-
-        neighbour = 0;
-        do
+        else
         {
-            printf("Neihgbour: ");
-            fgets(buffer, BUFFER_SIZE, stdin);
-            sscanf(buffer, "%d", &neighbour);
-        } while (neighbour < 1 || neighbour >= n_neighbour);
+            //  Print all available nodes in the <net> list and waits for the user choice.
+            
+            printf("\nInsert the number of the neighboor that you want to connect to.\n");
+
+            // Prints option list
+            for (int i = 1; i < n_neighbour; ++i)
+            {
+                printf("%d. ", i);
+                for (int j = pos_LF_vect[i - 1] + 1; j <= pos_LF_vect[i]; j++)
+                    printf("%c", message[j]);
+            }
+
+            // Waits for the user decision
+            neighbour = 0;
+            do
+            {
+                printf("Neihgbour: ");
+                fgets(buffer, BUFFER_SIZE, stdin);
+                sscanf(buffer, "%d", &neighbour);
+            } while (neighbour < 1 || neighbour >= n_neighbour);
+        }   
     }
 
+    // gets the information about the node, in order to connect to it
     memset(buffer, '\0', BUFFER_SIZE);
     int j = 0;
     for (int i = pos_LF_vect[neighbour - 1]; i < pos_LF_vect[neighbour]; i++)
@@ -57,6 +89,13 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
     pos_LF_vect = NULL;
 }
 
+/**
+ * The program is coded in a state machine with the following states
+ * @enum lobby              Waits to connect to a node
+ * @enum connecting         Process in which the one is exchanging information with the receiver node (future external neighbour)
+ * @enum connected          State where the machine is fully operational 
+ * @enum disconnecting      Disconnects the node from the network
+*/
 void network_interaction(char *ip, char *port)
 {
     enum
@@ -76,8 +115,9 @@ void network_interaction(char *ip, char *port)
     struct addrinfo hints, *res_server, *res_client;
     struct sockaddr_in addr_client;
     socklen_t addrlen;
-    struct timeval timeout = {2 /*seconds*/, 0 /*milliseconds*/}; // TODO alterar, pq nao sabemos onde a sessão está
+    struct timeval timeout = {2 /*seconds*/, 0 /*milliseconds*/};
     bool needs_to_connect=false;
+    srand(time(NULL)); 
 
     fd_server = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
 
@@ -91,8 +131,8 @@ void network_interaction(char *ip, char *port)
     Bind(fd_server, res_server->ai_addr, res_server->ai_addrlen);
     addrlen = (socklen_t)sizeof(addr_client);
 
-    bool is_connected = false;
-    bool machine_online = true;
+    bool is_connected = false;      // stores the information if a node was connected previously, which avoids calling speacific functions after consecutive iterations in the connected state.
+    bool machine_online = true;     // controls if the state machine is running or not
 
     while (machine_online)
     {
@@ -107,6 +147,7 @@ void network_interaction(char *ip, char *port)
             memset(buffer, '\0', MESSAGE_SIZE);
             fgets(buffer, MESSAGE_SIZE, stdin);
             sscanf(buffer, "%s", command);
+
             if (strcmp(command, "exit") == 0)
             {
                 state = disconnecting;
@@ -128,7 +169,9 @@ void network_interaction(char *ip, char *port)
                         break;
                     }
                     else
-                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed);
+                    {
+                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, true);
+                    }
                 }
                 else if (n == 4)
                     ; // ip:port already specified
@@ -286,7 +329,7 @@ void network_interaction(char *ip, char *port)
                         add_internal_neighbour(new_node_ip, new_node_port, newfd);
                     }
                     // send my external contact
-                    sprintf(message, "EXTERN %s %s\n", get_external_neighbour_ip(), get_external_neighbour_tcp()); // envia o proprio contacto
+                    sprintf(message, "EXTERN %s %s\n", get_external_neighbour_ip(), get_external_neighbour_tcp()); // sends ones contact
                     Write(newfd, message, strlen(message));
                     send_my_table(newfd);
                     // end of topology process
@@ -335,18 +378,29 @@ void network_interaction(char *ip, char *port)
                 }
                 else
                 {
-                    printf("Entrei no Else no Select() principal\n");
+                    if(DEBUG) printf("Entrei no Else no Select() principal\n");
                 }
             }
             break;
         }
         case disconnecting:
-        {
+        {   
+            // safetly closing the program
+
             close_UDP();
-            Close(fd_server);
-            fd_server = -1;
-            freeaddrinfo(res_server);
-            res_server = NULL;
+
+            if(fd_server != -1)
+            {
+                Close(fd_server);
+                fd_server = -1;
+            }
+
+            if(res_server != NULL)
+            {
+                freeaddrinfo(res_server);
+                res_server = NULL;
+            }
+
             printf("See you later alligator!\n");
             machine_online = false;
             break;
@@ -358,6 +412,8 @@ void network_interaction(char *ip, char *port)
 int main(int argc, char *argv[])
 {
 
+    // signal(SIGINT, handle_sigint);
+
     if (argc < 3 || argc > 5)
     {
         fprintf(stderr, "Invalid number of arguments\n");
@@ -367,7 +423,7 @@ int main(int argc, char *argv[])
 
     if (!set_parameters(argc, argv))
         exit(1);
-    get_info();
+    if(DEBUG) get_info();
 
     network_interaction(argv[1], argv[2]);
 
