@@ -29,7 +29,7 @@ struct resizable_vect
 // cache information
 struct cache_node
 {
-    char subname[BUFFER_SIZE];
+    char name[BUFFER_SIZE];
     struct cache_node *next;
     struct cache_node *previous;
 };
@@ -405,7 +405,10 @@ bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
 }
 
 /**
- * Initializes node struct
+ * Initializes node struct.
+ * @param   ip          IPv4 of ones node
+ * @param   port        TCP port of ones node
+ * @param   id          id of ones node
 */
 void node_init(char *id, char *ip, char *port)
 {
@@ -424,6 +427,7 @@ void node_init(char *id, char *ip, char *port)
 
 /**
  * Removes a specific socket from the direct neighbours array if it detects that a connection is closed
+ * @param   socket        Direct end point that is to be removed
 */
 void remove_direct_neighbour(int socket)
 {
@@ -472,9 +476,6 @@ int set_sockets(fd_set *rfds)
     int maxfd = 0;
     for (unsigned int i = 0; i < NODE.direct_neighbours->occupancy; i++)
     {
-        // if (((struct table *)NODE.table->item)[i].socket == -1) // personal connection in the adjancency table
-        //     continue;
-
         FD_SET(((int *)NODE.direct_neighbours->item)[i], rfds);
         maxfd = max(maxfd, ((int *)NODE.direct_neighbours->item)[i]);
     }
@@ -483,6 +484,8 @@ int set_sockets(fd_set *rfds)
 
 /**
  * Allocates and intializes resizable_vect
+ * @param   ptr      pointer to the array to allocate
+ * @param   size     size of an element of the array
 */
 struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size)
 {
@@ -533,7 +536,7 @@ void init_cache()
     for (int i = 0; i < CACHE_SIZE; i++)
     {
         struct cache_node *new_node = (struct cache_node *)checked_calloc(1, sizeof(struct cache_node));
-        memset(new_node->subname, '\0', BUFFER_SIZE);
+        memset(new_node->name, '\0', BUFFER_SIZE);
         new_node->next = NODE.head;
         new_node->previous = NULL;
         if (NODE.head != NULL)
@@ -546,7 +549,10 @@ void init_cache()
 }
 
 /**
- *  
+ * Begins the search for a file
+ * @param   name        name of the file to search for (id.subname)
+ * @param   socket      socket from where the search begun
+ * @param   waiting_for_object      boolean that specifies if the node is still waiting for a file
 */
 void search_object(char *name, int socket, bool waiting_for_object)
 {
@@ -562,6 +568,23 @@ void search_object(char *name, int socket, bool waiting_for_object)
         return;
     }
 
+    // search in my own cache
+    struct cache_node *ptr = search_my_cache(name);
+    if (ptr != NULL) // found it
+    {
+        if (waiting_for_object)
+        {
+            sprintf(message, "DATA %s.%s\n", id, subname);
+            Write(socket, message, strlen(message));
+        }
+        else
+        {
+            printf("I already have the object titled: '%s'.\n", name);
+        }
+        update_cache(name);
+        return;
+    }
+
     // validate the id
     for (unsigned int i = 0; i < NODE.table->occupancy; i++)
     {
@@ -574,23 +597,6 @@ void search_object(char *name, int socket, bool waiting_for_object)
     if (!id_in_my_table)
     {
         printf("The id: '%s' is not in my group chat...\n", id);
-        return;
-    }
-
-    // search in my own cache
-    struct cache_node *ptr = search_my_cache(subname);
-    if (ptr != NULL) // found it
-    {
-        if (waiting_for_object)
-        {
-            sprintf(message, "DATA %s.%s\n", id, subname);
-            Write(socket, message, strlen(message));
-        }
-        else
-        {
-            printf("I already have the object titled: '%s'.\n", subname);
-        }
-        update_cache(subname);
         return;
     }
 
@@ -616,6 +622,11 @@ void search_object(char *name, int socket, bool waiting_for_object)
     }
 }
 
+/**
+ * Loopback of the search for a file
+ * @param   name        name of the file to search for (id.subname)
+ * @param   command     "DATA" protocol command
+*/
 void return_search(char *command, char *name)
 {
     char id[BUFFER_SIZE];
@@ -632,7 +643,7 @@ void return_search(char *command, char *name)
     // save the object if it receives a DATA message
     if (strcmp(command, "DATA") == 0)
     {
-        update_cache(subname);
+        update_cache(name);
     }
 
     int socket = -1;
@@ -657,7 +668,7 @@ void return_search(char *command, char *name)
     if (socket == STDOUT_FILENO)
     {
         if (strcmp(command, "DATA") == 0)
-            printf("Gottcha, your Pokemon: '%s' is ready now!\n", subname);
+            printf("Gottcha, your Pokemon: '%s' is ready now!\n", name);
         else
             printf("Even though I had a tough time searching for the needle in the haystack, it is still missing :'(\n");
     }
@@ -668,6 +679,9 @@ void return_search(char *command, char *name)
     }
 }
 
+/**
+ * Prints the cache content on the terminal
+*/
 void show_cache()
 {
     struct cache_node *ptr = NODE.head;
@@ -676,21 +690,24 @@ void show_cache()
     printf("Cache\n");
     while (ptr != NULL)
     {
-        if (strlen(ptr->subname) != 0)
-            printf("%d. %s\n", ++count, ptr->subname);
+        if (strlen(ptr->name) != 0)
+            printf("%d. %s\n", ++count, ptr->name);
 
         ptr = ptr->next;
     }
     printf("OCCUPANCY: %d\t CACHE_SIZE: %d\n", count, CACHE_SIZE);
 }
 
-// LSR
-void update_cache(char *subname)
+/**
+ * Updates the cache content and it's order
+ * @param     name   title of the file to update in our cache
+*/
+void update_cache(char *name)
 {
-    struct cache_node *ptr = search_my_cache(subname);
+    struct cache_node *ptr = search_my_cache(name);
     if (ptr == NULL) // object does not exist in my cache
     {
-        sprintf(NODE.tail->subname, "%s", subname);
+        sprintf(NODE.tail->name, "%s", name);
         // criar ligações
         NODE.tail->next = NODE.head;
         NODE.head->previous = NODE.tail;
@@ -703,34 +720,53 @@ void update_cache(char *subname)
     }
     else
     {
-        // Remove from the middle
+        
         if (ptr->previous == NULL) // it already is the recently
             return;
 
-        ptr->previous->next = ptr->next;
-        ptr->next->previous = ptr->previous;
-        // According to the Least Recently Used(LRU)
-        ptr->next = NODE.head;
-        ptr->previous = NULL;
-        // update HEAD
-        NODE.head->previous = ptr;
-        NODE.head = ptr;
+        else if(ptr->next == NULL)   // is the last position
+        {
+            NODE.tail = ptr->previous;
+            NODE.tail->next = NULL;
+            ptr->previous = NULL;
+            NODE.head->previous = ptr;
+            ptr->next = NODE.head;
+            NODE.head = ptr;   
+        }
+        else    // Remove from the middle
+        {
+            ptr->previous->next = ptr->next;
+            ptr->next->previous = ptr->previous;
+            // According to the Least Recently Used(LRU)
+            ptr->next = NODE.head;
+            ptr->previous = NULL;
+            // update HEAD
+            NODE.head->previous = ptr;
+            NODE.head = ptr;
+        }
     }
 }
 
-struct cache_node *search_my_cache(char *subname)
+/**
+ * Search for a file in my own cache
+ * @param     name   title of the file to update in our cache
+*/
+struct cache_node *search_my_cache(char *name)
 {
     struct cache_node *ptr = NODE.head;
 
     while (ptr != NULL)
     {
-        if (strcmp(subname, ptr->subname) == 0) // found subname
+        if (strcmp(name, ptr->name) == 0) // found subname
             return ptr;
         ptr = ptr->next;
     }
     return NULL;
 }
 
+/**
+ * Free all allocated memory, specificaly of the node struct 
+*/
 void close_node()
 {
     if (NODE.direct_neighbours != NULL)

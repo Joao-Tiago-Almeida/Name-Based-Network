@@ -36,15 +36,13 @@ void Close(int fildes)
         printf("Closed(%d) successfully\n", fildes);
 }
 
-void Connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+int Connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int n = connect(sockfd, addr, addrlen);
     if (n == -1)
-    {
-        fprintf(stderr, "Error in Connect(): %s\n", strerror(errno));
-        Close(sockfd);
-        exit(1);
-    }
+        if(DEBUG) fprintf(stderr, "Error in Connect(%d): %s\n", sockfd, strerror(errno));
+
+    return n;
 }
 
 void Getaddrinfo(const char *hostname, const char *servname,

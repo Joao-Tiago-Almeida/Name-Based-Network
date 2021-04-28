@@ -24,7 +24,7 @@
 int Accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len);
 void Bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 void Close(int fildes);
-void Connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int Connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 void Getaddrinfo(const char *hostname, const char *servname, const struct addrinfo *hints, struct addrinfo **res);
 int Listen(int sockfd);
 ssize_t Read(int fd, char *buf);

@@ -130,6 +130,7 @@ void network_interaction(char *ip, char *port)
 
     Bind(fd_server, res_server->ai_addr, res_server->ai_addrlen);
     addrlen = (socklen_t)sizeof(addr_client);
+    int valid_connection = -1;
 
     bool is_connected = false;      // stores the information if a node was connected previously, which avoids calling speacific functions after consecutive iterations in the connected state.
     bool machine_online = true;     // controls if the state machine is running or not
@@ -170,7 +171,7 @@ void network_interaction(char *ip, char *port)
                     }
                     else
                     {
-                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, true);
+                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, false);
                     }
                 }
                 else if (n == 4)
@@ -194,9 +195,15 @@ void network_interaction(char *ip, char *port)
             printf("[CONNECTING] Waiting for connection confirmation.\n");
             fd_client = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
             Getaddrinfo(bootIP, bootTCP, &hints, &res_client);
-            Connect(fd_client, res_client->ai_addr, res_client->ai_addrlen);
+            valid_connection = Connect(fd_client, res_client->ai_addr, res_client->ai_addrlen);
             freeaddrinfo(res_client);
             res_client = NULL;
+            if(valid_connection == -1)
+            {   
+                state = lobby;
+                break;
+            }
+
             sprintf(message, "NEW %s %s\n", ip, port);
             Write(fd_client, message, strlen(message)); // NEW IP TCP<LF>
             FD_ZERO(&rfds);
@@ -261,7 +268,8 @@ void network_interaction(char *ip, char *port)
                     buffer[strlen(buffer)-1] = '\0';    // replace \n
                     if (strncmp(buffer, "create subname", 7) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
                     {   
-                        n = sscanf(buffer, "%*s %s", message);
+                        n = sscanf(buffer, "%*s %s", buf_aux);
+                        sprintf(message, "%s.%s", local_id, buf_aux);
                         if(n != 1) break;
                         update_cache(message);
                     }
