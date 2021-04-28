@@ -1,6 +1,6 @@
 #include "tree.h"
 
-#define ALLOCATION_OFFSET 5
+#define ALLOCATION_OFFSET 2
 #define CACHE_SIZE 5
 
 // camada da topologia
@@ -146,7 +146,8 @@ void send_my_table(int socket)
             // income socket
             if (((struct table *)NODE.table->item)[j].socket == socket) // i == j
                 continue;
-
+            else if(strlen(((struct table *)NODE.table->item)[j].id) == 0) // node not known yet
+                continue;
             sprintf(message, "ADVERTISE %s\n", ((struct table *)NODE.table->item)[j].id);
             Write(socket, message, strlen(message));
         }
@@ -290,6 +291,7 @@ void withdraw_update_table(int socket, char *id, bool detected_withdraw)
 
 bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
 {
+    char message[MESSAGE_SIZE];
     //  see if the node that left was my internal neighbour
     if (NODE.list_internal_neighbours != NULL)
     {
@@ -330,8 +332,8 @@ bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
         sprintf(NODE.external_neighbour.ip, "%s", ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].ip);
         sprintf(NODE.external_neighbour.tcp, "%s", ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].tcp);
         NODE.external_neighbour.socket = ((struct contact *)NODE.list_internal_neighbours->item)[NODE.list_internal_neighbours->occupancy - 1].socket;
+        
         // updates the recovery neighour of the promoted node
-        char message[MESSAGE_SIZE];
         sprintf(message, "EXTERN %s %s\n", NODE.external_neighbour.ip, NODE.external_neighbour.tcp); // envia o proprio contacto
         Write(NODE.external_neighbour.socket, message, strlen(message));
         NODE.list_internal_neighbours->occupancy--;
@@ -341,6 +343,16 @@ bool reconnect_network(int fd_neighbour, char *bootIP, char *bootTCP)
     memset(&NODE.external_neighbour, '\0', sizeof(struct contact));
     sprintf(bootIP, "%s", NODE.recovery_contact.ip);
     sprintf(bootTCP, "%s", NODE.recovery_contact.tcp);
+    //dizer aos vizinhos internos que vou mudar de externo
+    if (NODE.list_internal_neighbours != NULL)
+    {
+        for (unsigned int i = 0; i < NODE.list_internal_neighbours->occupancy; i++)
+        {
+            memset(message, '\0', MESSAGE_SIZE);
+            sprintf(message, "EXTERN %s %s\n", NODE.recovery_contact.ip, NODE.recovery_contact.tcp); // envia o proprio contacto
+            Write(((struct contact *)NODE.list_internal_neighbours->item)[i].socket, message, strlen(message));
+        }
+    }
 
     return true;
 }
@@ -430,6 +442,7 @@ struct resizable_vect *add_item_checkup(struct resizable_vect *ptr, ssize_t size
     {
         ptr->max_size = ptr->max_size + ALLOCATION_OFFSET; // increase max
         ptr->item = checked_realloc(ptr->item, size * (ptr->max_size));
+        memset(ptr->item+size*ptr->occupancy, '\0', size*ALLOCATION_OFFSET);
     }
     ptr->occupancy++;
     return ptr;

@@ -69,8 +69,8 @@ void network_interaction(char *ip, char *port)
     state = lobby; // initial state
 
     char buffer[MESSAGE_SIZE], command[MESSAGE_SIZE], net[BUFFER_SIZE], local_id[BUFFER_SIZE], bootIP[BUFFER_SIZE], bootTCP[BUFFER_SIZE], message[MESSAGE_SIZE + 1], id_or_name[BUFFER_SIZE];
-    char new_node_ip[BUFFER_SIZE], new_node_port[BUFFER_SIZE]; // IP and TCP for a node that is already in the tree
-    int number_of_line_feed = 0, number_of_bytes_read=0;
+    char new_node_ip[BUFFER_SIZE], new_node_port[BUFFER_SIZE], buf_aux[BUFFER_SIZE]; // IP and TCP for a node that is already in the tree
+    int number_of_line_feed = 0, number_of_bytes_read=0, n=0;
     int fd_server, fd_client, fd_neighbour, newfd, n_select, maxfd=0;
     fd_set rfds;
     struct addrinfo hints, *res_server, *res_client;
@@ -114,7 +114,7 @@ void network_interaction(char *ip, char *port)
             }
             else if (strcmp(command, "join") == 0)
             {
-                int n = sscanf(buffer, "%*s %s %s %s %s", net, local_id, bootIP, bootTCP);
+                n = sscanf(buffer, "%*s %s %s %s %s", net, local_id, bootIP, bootTCP);
                 sprintf(message, "NODES %s", net);
                 send_udp_message(message);
                 receive_udp_message(message);
@@ -218,12 +218,14 @@ void network_interaction(char *ip, char *port)
                     buffer[strlen(buffer)-1] = '\0';    // replace \n
                     if (strncmp(buffer, "create subname", 7) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
                     {   
-                        sscanf(buffer, "%*s %s", message);
+                        n = sscanf(buffer, "%*s %s", message);
+                        if(n != 1) break;
                         update_cache(message);
                     }
                     else if (strncmp(buffer, "get name", 4) == 0) // Inicia-se a pesquisa do objeto com o nome name. Este nome será da forma id.subname, em que id é o identificador de um nó e subname é o sub-nome do objeto atribuído pelo nó com identificador id.
                     {
-                        sscanf(buffer, "%*s %s", message);
+                        n = sscanf(buffer, "%*s %s", message);
+                        if(n != 1) break;
                         search_object(message, STDOUT_FILENO, false);
                     }
                     else if (strcmp(buffer, "show topology") == 0 || strcmp(buffer, "st") == 0) // Mostra os contactos do vizinho externo e do vizinho de recuperação.
@@ -267,8 +269,11 @@ void network_interaction(char *ip, char *port)
 
                     newfd = Accept(fd_server, (struct sockaddr *)&addr_client, &addrlen);
 
+                    memset(message, '\0', MESSAGE_SIZE);
+                    memset(buf_aux, '\0', BUFFER_SIZE);
                     Read(newfd, message);
-                    sscanf(message, "NEW %s %s\n", new_node_ip, new_node_port); // neighbour information
+                    n = sscanf(message, "%s %s %s\n", buf_aux, new_node_ip, new_node_port); // neighbour information
+                    if(n != 3 || strcmp(buf_aux,"NEW")) break;
 
                     if (strlen(get_external_neighbour_ip()) == 0) // node without neighbours
                     {   
@@ -303,7 +308,8 @@ void network_interaction(char *ip, char *port)
                         continue;
                     }
 
-                    sscanf(message, "%s %s", command, id_or_name); 
+                    n = sscanf(message, "%s %s", command, id_or_name);
+                    if(n != 2) break; 
                     if(strcmp(command, "ADVERTISE") == 0)   //  Anúncio do nó com identificador id.
                     {
                         broadcast_advertise(fd_neighbour, id_or_name);
@@ -322,7 +328,8 @@ void network_interaction(char *ip, char *port)
                     }
                     else if(strcmp(command, "EXTERN") == 0) // fomos promovidos a vizinhos externos, atualizo o meu vizinho exetrno que se tudo correr so eu próprio
                     {   
-                        sscanf(message, "%*s %s %s", new_node_ip, new_node_port); 
+                        n = sscanf(message, "%*s %s %s", new_node_ip, new_node_port); 
+                        if(n != 2) break;
                         update_recovery_contact(new_node_ip, new_node_port);
                     }
                 }
