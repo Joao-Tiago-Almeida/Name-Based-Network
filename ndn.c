@@ -1,7 +1,4 @@
-#include <stdlib.h>
-#include <stdio.h>
 #include <time.h>
-#include<signal.h>
 
 #include "nodes_list.h"
 #include "tree.h"
@@ -13,11 +10,6 @@ void print_usage(char *program_name)
 {
     printf("Usage: %s IP TCP (regIP) (regUDP)\n", program_name);
 }
-
-/**
- * Blocks the system functions to be called, e.g. cmd/control + c.
-*/
-void handle_sigint(){/* do nothing */}
 
 /**
  * Selects the node where the ones is going to try to connect.
@@ -170,7 +162,7 @@ void network_interaction(char *ip, char *port)
                     }
                     else
                     {
-                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, false);
+                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, true);
                     }
                 }
                 else if (n == 4)
@@ -419,8 +411,6 @@ void network_interaction(char *ip, char *port)
 
 int main(int argc, char *argv[])
 {
-
-    signal(SIGINT, handle_sigint);
 
     if (argc < 3 || argc > 5)
     {
