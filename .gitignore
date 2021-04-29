@@ -56,3 +56,9 @@ ndn
 
 #vscode fodler
 .vscode/*
+
+#object files
+obj.zip
+
+#self-evaluation paper
+RNAutoAvaliacao.pdf
