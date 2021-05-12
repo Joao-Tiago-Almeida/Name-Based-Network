@@ -14,7 +14,7 @@ clean:
 	@clear
 	rm $(EXECUTABLE) *.txt
 
-EXE_MAC := ./ndn 192.168.1.14
+EXE_MAC := ./ndn 192.168.1.81
 memory0:
 		clear
 		@leaks -fullContent -atExit -- $(EXE_MAC) 50000

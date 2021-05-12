@@ -119,7 +119,8 @@ void network_interaction(char *ip, char *port)
     hints.ai_flags = AI_PASSIVE;
 
     Getaddrinfo(NULL, port, &hints, &res_server);
-
+    Bind(fd_server, res_server->ai_addr, res_server->ai_addrlen);
+    
     addrlen = (socklen_t)sizeof(addr_client);
     int valid_connection = -1;
 
@@ -219,7 +220,6 @@ void network_interaction(char *ip, char *port)
                 node_init(local_id, ip, port);
 
                 // Starting accepting incoming connections
-                Bind(fd_server, res_server->ai_addr, res_server->ai_addrlen);
                 Listen(fd_server);
 
                 // Tell the UDP server I am on!
