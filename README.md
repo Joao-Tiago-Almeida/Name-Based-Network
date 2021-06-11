@@ -7,7 +7,7 @@ A name based Network is a network where a node has a set of named objects which 
 When a user of a origin node wants to find a specific node, that node sends a _intereset_  message with the name of that object. The _intereset_ message is forward in the network in direction of the node that contains the object. The destination node or other intermidiate that has the the object stored in its cache answers to the _intereset_ message with an _object_ message contacining the name and the interest object. The origin node and the intermidiate which forward the _object_ message from the destination to the origin stored that object in its cache.
 
 
-# Ease of use
+## Ease of use
 
 The aplication starts by compiling it with the `make` command in the [src](./scr) folder. The next setp is to run the **ndn** executable as
 
