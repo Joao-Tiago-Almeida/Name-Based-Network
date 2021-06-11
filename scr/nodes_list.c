@@ -18,7 +18,7 @@ socklen_t addrlen = sizeof(addr);
 char buffer[BUFFER_SIZE];
 
 /**
- * Safetly Close all allocated memory related with UDP 
+ * Safetly Close all allocated memory related with UDP
 */
 void close_UDP()
 {
@@ -64,15 +64,15 @@ void open_UDP()
 /**
  * Sends a message to the remote UDP server.
  * Types of message and responses
- * 
+ *
  * - [CLIENT] REG net IP TCP   :   Um nó regista o seu contacto no servidor de nós e associa-o à rede net.
  * - [SERVER] OKREG            :   O servidor de nós confirma o registo de um contacto.
  * - [CLIENT] UNREG net IP TCP :   O nó retira o seu contacto associado à rede net.
  * - [SERVER] OKUNREG          :   O servidor de nós confirma a retirada de um contacto.
- * 
+ *
  * - [CLIENT] NODES net        :   Um nó pede ao servidor de nós os contactos associados à rede net.
  * - [SERVER] NODESLIST net<LF>
- *                 IP1 TCP1<LF>    
+ *                 IP1 TCP1<LF>
  *                 IP2 TCP2<LF>    :   O servidor de nós confirma a retirada de um contacto.
  * @param   message     Message to be sent.
 */

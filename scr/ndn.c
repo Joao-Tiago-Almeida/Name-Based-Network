@@ -16,10 +16,10 @@ void print_usage(char *program_name)
  * @param   message         Response of the nodes list server for the command NODES <net>.
  * This message has the form NODESLIST <net> \n <IPv4_available_node_1>  <IPv4_available_node_1> \n ... <IPv4_available_node_N>  <IPv4_available_node_N> \n
  * @param   bootIP          IPv4 port of the node that the incoming node is going to connect to   @return
- * @param   bootTCP         TCP port of the node that the incoming node is going to connect to    @return    
+ * @param   bootTCP         TCP port of the node that the incoming node is going to connect to    @return
  * @param   n_neighbour     Number of available nodes in the network plus the header information. In real the number of available nodes in the network is n_neighbour-1
  * @param   random_choice   When random_choice is true, the program choose a random neighour, otherwise it allows the user to choose a neighour from the network
- * Disable this flag will allow a better user experience when building a network in the same net. 
+ * Disable this flag will allow a better user experience when building a network in the same net.
 */
 void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neighbour, bool random_choice)
 {
@@ -37,16 +37,16 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
     }
 
     if (n_neighbour > 2) // in case there is more than one neighbour
-    {   
+    {
         // Randomly chososes one node in the list
         if( random_choice )
-        {  
+        {
             neighbour = 1 + rand()%(n_neighbour-1);
         }
         else
         {
             //  Print all available nodes in the <net> list and waits for the user choice.
-            
+
             printf("\nInsert the number of the neighboor that you want to connect to.\n");
 
             // Prints option list
@@ -65,7 +65,7 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
                 fgets(buffer, BUFFER_SIZE, stdin);
                 sscanf(buffer, "%d", &neighbour);
             } while (neighbour < 1 || neighbour >= n_neighbour);
-        }   
+        }
     }
 
     // gets the information about the node, in order to connect to it
@@ -85,7 +85,7 @@ void choose_neighbour(char message[], char bootIP[], char bootTCP[], int n_neigh
  * The program is coded in a state machine with the following states
  * @enum lobby              Waits to connect to a node
  * @enum connecting         Process in which the one is exchanging information with the receiver node (future external neighbour)
- * @enum connected          State where the machine is fully operational 
+ * @enum connected          State where the machine is fully operational
  * @enum disconnecting      Disconnects the node from the network
 */
 void network_interaction(char *ip, char *port)
@@ -109,7 +109,7 @@ void network_interaction(char *ip, char *port)
     socklen_t addrlen;
     struct timeval timeout = {2 /*seconds*/, 0 /*milliseconds*/};
     bool needs_to_connect=false;
-    srand(time(NULL)); 
+    srand(time(NULL));
 
     fd_server = Socket(AF_INET, SOCK_STREAM, 0); //TCP socket
 
@@ -120,7 +120,7 @@ void network_interaction(char *ip, char *port)
 
     Getaddrinfo(NULL, port, &hints, &res_server);
     Bind(fd_server, res_server->ai_addr, res_server->ai_addrlen);
-    
+
     addrlen = (socklen_t)sizeof(addr_client);
     int valid_connection = -1;
 
@@ -150,9 +150,10 @@ void network_interaction(char *ip, char *port)
             {
                 n = sscanf(buffer, "%*s %s %s %s %s", net, local_id, bootIP, bootTCP);
                 sprintf(message, "NODES %s", net);
-                send_udp_message(message);
-                receive_udp_message(message);
-                number_of_line_feed = get_number_of_LF(message);
+                // send_udp_message(message);
+                // receive_udp_message(message);
+                // number_of_line_feed = get_number_of_LF(message);
+                number_of_line_feed = 1;
 
                 if (n == 2) // ask for a neighbour
                 {
@@ -163,7 +164,7 @@ void network_interaction(char *ip, char *port)
                     }
                     else
                     {
-                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, true);
+                        choose_neighbour(message, bootIP, bootTCP, number_of_line_feed, false);
                     }
                 }
                 else if (n == 4)
@@ -191,7 +192,7 @@ void network_interaction(char *ip, char *port)
             freeaddrinfo(res_client);
             res_client = NULL;
             if(valid_connection == -1)
-            {   
+            {
                 state = lobby;
                 break;
             }
@@ -201,7 +202,7 @@ void network_interaction(char *ip, char *port)
             FD_ZERO(&rfds);
             FD_SET(fd_client, &rfds);
             if (Select(fd_client + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout)) // if time reach to the end, a = is returned
-            {   
+            {
                 Read(fd_client, message); // EXTERN IP TCP<LF>
                 node_init(local_id, ip, port);
                 set_external_and_recovery(bootIP, bootTCP, message, fd_client);
@@ -224,13 +225,13 @@ void network_interaction(char *ip, char *port)
 
                 // Tell the UDP server I am on!
                 sprintf(message, "REG %s %s %s", net, ip, port);
-                send_udp_message(message);      
-                receive_udp_message(message);
-                if (strcmp(message, "OKREG")) // not register
-                {
-                    printf("Could not register on the UDP list. Try again.\n");
-                    break;
-                }
+                // send_udp_message(message);
+                // receive_udp_message(message);
+                // if (strcmp(message, "OKREG")) // not register
+                // {
+                //     printf("Could not register on the UDP list. Try again.\n");
+                //     break;
+                // }
                 is_connected = true;
 
                 printf("[CONNECTED] You are connected. Available commands:\n");
@@ -259,7 +260,7 @@ void network_interaction(char *ip, char *port)
                     fgets(buffer, BUFFER_SIZE, stdin);
                     buffer[strlen(buffer)-1] = '\0';    // replace \n
                     if (strncmp(buffer, "create subname", 7) == 0) // É criado um objeto cujo nome será da forma id.subname, em que id é o identificador do nó.
-                    {   
+                    {
                         n = sscanf(buffer, "%*s %s", buf_aux);
                         sprintf(message, "%s.%s", local_id, buf_aux);
                         if(n != 1) break;
@@ -286,8 +287,8 @@ void network_interaction(char *ip, char *port)
                     else if (strcmp(buffer, "leave") == 0) // Saída do nó da rede.
                     {
                         sprintf(message, "UNREG %s %s %s", net, ip, port);
-                        send_udp_message(message);
-                        receive_udp_message(message);
+                        // send_udp_message(message);
+                        // receive_udp_message(message);
                         close_node();
                         is_connected = false;
                         state=lobby;
@@ -295,11 +296,11 @@ void network_interaction(char *ip, char *port)
                     else if (strcmp(buffer, "exit") == 0) // Fecho da aplicação.
                     {
                         sprintf(message, "UNREG %s %s %s", net, ip, port);
-                        send_udp_message(message);
-                        receive_udp_message(message);
+                        // send_udp_message(message);
+                        // receive_udp_message(message);
                         close_node();
                         state = disconnecting;
-            
+
                     }
                     else
                     {
@@ -319,7 +320,7 @@ void network_interaction(char *ip, char *port)
                     if(n != 3 || strcmp(buf_aux,"NEW")) break;
 
                     if (strlen(get_external_neighbour_ip()) == 0) // node without neighbours
-                    {   
+                    {
                         // set my contacts
                         sprintf(message, "EXTERN %s %s\n", ip, port); // my recovery contact is ... myself
                         set_external_and_recovery(new_node_ip, new_node_port, message, newfd);
@@ -339,8 +340,8 @@ void network_interaction(char *ip, char *port)
                 {
                     FD_CLR(fd_neighbour, &rfds);
                     number_of_bytes_read = Read(fd_neighbour, message);
-                    if(number_of_bytes_read==0) 
-                    {   
+                    if(number_of_bytes_read==0)
+                    {
                         withdraw_update_table(fd_neighbour, "\0", true);
                         remove_direct_neighbour(fd_neighbour);
                         needs_to_connect = reconnect_network(fd_neighbour, bootIP, bootTCP);
@@ -352,7 +353,7 @@ void network_interaction(char *ip, char *port)
                     }
 
                     n = sscanf(message, "%s %s", command, id_or_name);
-                    if(n != 2) break; 
+                    if(n != 2) break;
                     if(strcmp(command, "ADVERTISE") == 0)   //  Anúncio do nó com identificador id.
                     {
                         broadcast_advertise(fd_neighbour, id_or_name);
@@ -370,8 +371,8 @@ void network_interaction(char *ip, char *port)
                         return_search(command, id_or_name);
                     }
                     else if(strcmp(command, "EXTERN") == 0) // fomos promovidos a vizinhos externos, atualizo o meu vizinho exetrno que se tudo correr so eu próprio
-                    {   
-                        n = sscanf(message, "%*s %s %s", new_node_ip, new_node_port); 
+                    {
+                        n = sscanf(message, "%*s %s %s", new_node_ip, new_node_port);
                         if(n != 2) break;
                         update_recovery_contact(new_node_ip, new_node_port);
                     }
@@ -384,7 +385,7 @@ void network_interaction(char *ip, char *port)
             break;
         }
         case disconnecting:
-        {   
+        {
             // safetly closing the program
 
             close_UDP();

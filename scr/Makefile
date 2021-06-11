@@ -63,7 +63,7 @@ valgrind0:
 
 valgrind1:
 		clear
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf1-out.txt $(EXE_WINDOWS) 50001 
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf1-out.txt $(EXE_WINDOWS) 50001
 
 valgrind2:
 		clear
@@ -71,15 +71,15 @@ valgrind2:
 
 valgrind3:
 		clear
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf3-out.txt $(EXE_WINDOWS) 50003 
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf3-out.txt $(EXE_WINDOWS) 50003
 
 valgrind4:
 		clear
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf4-out.txt $(EXE_WINDOWS) 50004 
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf4-out.txt $(EXE_WINDOWS) 50004
 
 valgrind5:
 		clear
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf5-out.txt $(EXE_WINDOWS) 50005 
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrinf5-out.txt $(EXE_WINDOWS) 50005
 
 valgrind6:
 		clear
